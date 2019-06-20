@@ -81,6 +81,10 @@ enum handler_return arm_ipi_reschedule_handler(void *arg)
 
 void arch_mp_init_percpu(void)
 {
+    int pmcr_mask = 1;
+
+    __asm__ volatile("msr pmcr_el0, %0":: "r"(pmcr_mask):);
+
     register_int_handler(MP_IPI_GENERIC + GIC_IPI_BASE, &arm_ipi_generic_handler, 0);
     register_int_handler(MP_IPI_RESCHEDULE + GIC_IPI_BASE, &arm_ipi_reschedule_handler, 0);
 

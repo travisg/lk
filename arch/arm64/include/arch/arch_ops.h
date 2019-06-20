@@ -233,6 +233,14 @@ static inline uint32_t arch_cycle_count(void)
                      : "=r" (count)
                     );
     return count;
+#elif ARM_ISA_ARMV8
+    uint32_t count;
+
+    ISB;
+    __asm__ volatile("mrs %0, pmccntr_el0"
+                     : "=r" (count)
+                    );
+    return count;
 #else
 //#warning no arch_cycle_count implementation
     return 0;
