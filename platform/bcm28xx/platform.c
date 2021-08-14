@@ -11,6 +11,7 @@
 #include <lk/trace.h>
 
 #include <dev/uart.h>
+#include <dev/pl011.h>
 #include <arch.h>
 #include <lk/init.h>
 #include <kernel/vm.h>
@@ -108,7 +109,7 @@ void platform_init_mmu_mappings(void) {
 }
 
 void platform_early_init(void) {
-    uart_init_early();
+    pl011_uart_init_early(0, UART0_BASE);
 
     intc_init();
 
@@ -195,7 +196,14 @@ void platform_early_init(void) {
 }
 
 void platform_init(void) {
-    uart_init();
+    pl011_uart_init(INTERRUPT_VC_UART, 0, UART0_BASE);
+#if BCM2838
+    pl011_uart_init(INTERRUPT_VC_UART, 2, UART2_BASE);
+    pl011_uart_init(INTERRUPT_VC_UART, 3, UART3_BASE);
+    pl011_uart_init(INTERRUPT_VC_UART, 4, UART4_BASE);
+    pl011_uart_init(INTERRUPT_VC_UART, 5, UART5_BASE);
+#endif
+
 #if BCM2837
     init_framebuffer();
 #endif

@@ -12,6 +12,7 @@
 #include <dev/interrupt/arm_gic.h>
 #include <dev/timer/arm_generic.h>
 #include <dev/uart.h>
+#include <dev/pl011.h>
 #include <dev/virtio.h>
 #include <dev/virtio/net.h>
 #include <lib/fdtwalk.h>
@@ -104,7 +105,7 @@ void platform_early_init(void) {
 
     arm_generic_timer_init(ARM_GENERIC_TIMER_PHYSICAL_INT, 0);
 
-    uart_init_early();
+    pl011_uart_init_early(0, UART_BASE);
 
     int cpu_count = 0;
     bool found_mem = false;
@@ -156,7 +157,7 @@ void platform_early_init(void) {
 }
 
 void platform_init(void) {
-    uart_init();
+    pl011_uart_init(UART0_INT, 0, UART_BASE);
 
     /* detect any virtio devices */
     uint virtio_irqs[NUM_VIRTIO_TRANSPORTS];

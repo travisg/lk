@@ -12,8 +12,8 @@
 #include <kernel/thread.h>
 #include <platform/interrupts.h>
 #include <platform/debug.h>
-#include <platform/qemu-virt.h>
 #include <target/debugconfig.h>
+#include <assert.h>
 
 /* PL011 implementation */
 #define UART_DR    (0x00)
@@ -37,24 +37,22 @@
 #define NUM_UART 1
 
 static cbuf_t uart_rx_buf[NUM_UART];
+static uintptr_t uart_base[NUM_UART];
 
 static inline uintptr_t uart_to_ptr(unsigned int n) {
-    switch (n) {
-        default:
-        case 0:
-            return UART_BASE;
-    }
+    return uart_base[n];
 }
 
 static enum handler_return uart_irq(void *arg) {
     bool resched = false;
-    uint port = (uintptr_t)arg;
+    uint port = (uint)arg;
     uintptr_t base = uart_to_ptr(port);
 
     /* read interrupt status and mask */
     uint32_t isr = UARTREG(base, UART_TMIS);
 
-    if (isr & (1<<4)) { // rxmis
+    if (isr & ((1<<6) | (1<<4))) { // rtmis, rxmis
+        UARTREG(base, UART_ICR) = (1<<4);
         cbuf_t *rxbuf = &uart_rx_buf[port];
 
         /* while fifo is not empty, read chars out of it */
@@ -83,37 +81,38 @@ static enum handler_return uart_irq(void *arg) {
     return resched ? INT_RESCHEDULE : INT_NO_RESCHEDULE;
 }
 
-void uart_init(void) {
-    for (size_t i = 0; i < NUM_UART; i++) {
-        uintptr_t base = uart_to_ptr(i);
+void pl011_uart_init(int irq, int nr, uintptr_t base) {
+    assert(nr < NUM_UART);
+    uart_base[nr] = base;
+    // create circular buffer to hold received data
+    cbuf_initialize(&uart_rx_buf[nr], RXBUF_SIZE);
 
-        // create circular buffer to hold received data
-        cbuf_initialize(&uart_rx_buf[i], RXBUF_SIZE);
+    // assumes interrupts are contiguous
+    register_int_handler(irq, &uart_irq, (void *)nr);
 
-        // assumes interrupts are contiguous
-        register_int_handler(UART0_INT + i, &uart_irq, (void *)i);
+    // clear all irqs
+    UARTREG(base, UART_ICR) = 0x3ff;
 
-        // clear all irqs
-        UARTREG(base, UART_ICR) = 0x3ff;
+    UARTREG(base, UART_LCRH) = (3<<5) // 8bit mode
+                | (1<<4); // fifo enable
 
-        // set fifo trigger level
-        UARTREG(base, UART_IFLS) = 0; // 1/8 rxfifo, 1/8 txfifo
+    // set fifo trigger level
+    UARTREG(base, UART_IFLS) = 4 << 3; // 7/8 rxfifo, 1/8 txfifo
 
-        // enable rx interrupt
-        UARTREG(base, UART_IMSC) = (1<<4); // rxim
+    // enable rx interrupt
+    UARTREG(base, UART_IMSC) = (1<<6)|(1<<4); // rtim, rxim
 
-        // enable receive
-        UARTREG(base, UART_CR) |= (1<<9); // rxen
+    // enable receive
+    UARTREG(base, UART_CR) |= (1<<9)|(1<<8)|(1<<0); // rxen, tx_enable, uarten
 
-        // enable interrupt
-        unmask_interrupt(UART0_INT + i);
-    }
+    // enable interrupt
+    unmask_interrupt(irq);
 }
 
-void uart_init_early(void) {
-    for (size_t i = 0; i < NUM_UART; i++) {
-        UARTREG(uart_to_ptr(i), UART_CR) = (1<<8)|(1<<0); // tx_enable, uarten
-    }
+void pl011_uart_init_early(int nr, uintptr_t base) {
+    assert(nr < NUM_UART);
+    uart_base[nr] = base;
+    UARTREG(uart_to_ptr(nr), UART_CR) = (1<<8)|(1<<0); // tx_enable, uarten
 }
 
 int uart_putc(int port, char c) {
@@ -132,7 +131,7 @@ int uart_getc(int port, bool wait) {
 
     char c;
     if (cbuf_read_char(rxbuf, &c, wait) == 1) {
-        UARTREG(uart_to_ptr(port), UART_IMSC) = (1<<4); // rxim
+        UARTREG(uart_to_ptr(port), UART_IMSC) |= (1<<4); // rxim
         return c;
     }
 

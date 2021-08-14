@@ -36,7 +36,15 @@
 #define PCM_CLOCK_BASE          (BCM_PERIPH_BASE_VIRT + 0x101098)
 #define RNG_BASE                (BCM_PERIPH_BASE_VIRT + 0x104000)
 #define GPIO_BASE               (BCM_PERIPH_BASE_VIRT + 0x200000)
+
+// all PL011 uarts, 2-5 only exist on BCM2828/pi4/VC6
+// all share the same INTERRUPT_VC_UART
 #define UART0_BASE              (BCM_PERIPH_BASE_VIRT + 0x201000)
+#define UART2_BASE              (BCM_PERIPH_BASE_VIRT + 0x201400)
+#define UART3_BASE              (BCM_PERIPH_BASE_VIRT + 0x201600)
+#define UART4_BASE              (BCM_PERIPH_BASE_VIRT + 0x201800)
+#define UART5_BASE              (BCM_PERIPH_BASE_VIRT + 0x201a00)
+
 #define MMCI0_BASE              (BCM_PERIPH_BASE_VIRT + 0x202000)
 #define I2S_BASE                (BCM_PERIPH_BASE_VIRT + 0x203000)
 #define SPI0_BASE               (BCM_PERIPH_BASE_VIRT + 0x204000)
@@ -174,6 +182,15 @@
 #define MAX_INT INTERRUPT_ARM_LOCAL_TIMER
 
 /* GPIO */
+
+#define GPIO_IN 0
+#define GPIO_OUT 1
+#define GPIO_ALT5 2
+#define GPIO_ALT4 3
+#define GPIO_ALT0 4
+#define GPIO_ALT1 5
+#define GPIO_ALT2 6
+#define GPIO_ALT3 7
 
 #define GPIO_GPFSEL0   (GPIO_BASE + 0x00)
 #define GPIO_GPFSEL1   (GPIO_BASE + 0x04)

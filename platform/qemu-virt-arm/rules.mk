@@ -19,7 +19,6 @@ MODULE_SRCS += \
     $(LOCAL_DIR)/debug.c \
     $(LOCAL_DIR)/platform.c \
     $(LOCAL_DIR)/secondary_boot.S \
-    $(LOCAL_DIR)/uart.c
 
 MEMBASE := 0x40000000
 MEMSIZE ?= 0x08000000   # 512MB
@@ -33,6 +32,7 @@ MODULE_DEPS += \
     dev/virtio/block \
     dev/virtio/gpu \
     dev/virtio/net \
+    dev/pl011 \
 
 GLOBAL_DEFINES += \
     MEMBASE=$(MEMBASE) \

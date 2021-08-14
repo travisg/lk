@@ -42,8 +42,8 @@ SMP_CPU_ID_BITS := 8
 GLOBAL_DEFINES += \
 	BCM2836=1
 
-MODULE_SRCS += \
-	$(LOCAL_DIR)/uart.c
+MODULES += \
+	dev/pl011
 
 else ifeq ($(TARGET),rpi3)
 ARCH := arm64
