@@ -13,11 +13,14 @@
 #include <stm32f4xx_usart.h>
 #include <stm32f4xx_rcc.h>
 #include <stm32f4xx_gpio.h>
+#include <stm32f4xx_ltdc.h>
 #include <platform/stm32.h>
 #include <platform/gpio.h>
 #include <target.h>
 #include <target/debugconfig.h>
 #include <target/gpioconfig.h>
+
+extern uint8_t STM_LCD_Init(void);
 
 void target_early_init(void) {
 #ifdef DEBUG_UART
@@ -38,6 +41,7 @@ void target_early_init(void) {
     gpio_config(GPIO_LED1, GPIO_OUTPUT);
     gpio_config(GPIO_LED2, GPIO_OUTPUT);
     gpio_config(GPIO_LED3, GPIO_OUTPUT);
+    STM_LCD_Init();
 }
 
 void target_init(void) {
