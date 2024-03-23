@@ -91,5 +91,4 @@ static inline uint arch_curr_cpu_num(void) {
 #define smp_rmb()   CF
 #endif
 
-
 #endif // !ASSEMBLY

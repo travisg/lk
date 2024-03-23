@@ -54,10 +54,11 @@ static void pci_list(void) {
 
                     if (config.vendor_id != 0xffff) {
                         printf("%04x:%02x:%02x.%0x vendor_id=%04x device_id=%04x, header_type=%02x "
-                                "base_class=%02x, sub_class=%02x, interface=%02x, irq=%u\n",
+                                "base_class=%02x, sub_class=%02x, interface=%02x, irq_line=%u, irq_pin=%u\n",
                                state.segment, state.bus, state.dev, state.fn,
                                config.vendor_id, config.device_id, config.header_type, config.base_class,
-                               config.sub_class, config.program_interface, config.type0.interrupt_line);
+                               config.sub_class, config.program_interface, config.type0.interrupt_line,
+                               config.type0.interrupt_pin);
                         devices++;
                         lines++;
                     }

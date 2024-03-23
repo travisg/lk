@@ -13,6 +13,7 @@
 #include <dev/virtio.h>
 #include <dev/virtio/virtio_ring.h>
 #include <dev/virtio/virtio-bus.h>
+#include <platform/interrupts.h>
 
 class virtio_device {
 public:
@@ -52,6 +53,7 @@ public:
 
     void *get_config_ptr() { return config_ptr_; }
     const void *get_config_ptr() const { return config_ptr_; }
+    void set_config_ptr(void *ptr) { config_ptr_ = ptr; }
 
     using irq_driver_callback = enum handler_return (*)(virtio_device *dev, uint ring, const vring_used_elem *e);
     using config_change_callback = enum handler_return (*)(virtio_device *dev);
@@ -61,7 +63,8 @@ public:
         config_change_callback_ = config;
     }
 
-    // From low level bus layer
+    // Interrupt handler callbacks from the bus layer, which is responsible
+    // for the first layer of IRQ handling
     handler_return handle_queue_interrupt();
     handler_return handle_config_interrupt();
 
@@ -69,25 +72,17 @@ public:
     static const size_t MAX_VIRTIO_RINGS = 4;
 
 private:
-    friend class virtio_bus;
-
-    // XXX move this into constructor
-    friend int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride);
-
     // mmio or pci
     virtio_bus *bus_ = {};
 
     // points into bus's configuration spot
-    // TODO: is this feasible for both PCI and mmio?
     void *config_ptr_ = {};
 
-    void *priv_ = {}; /* a place for the driver to put private data */
+    // a place for the driver to put private data, usually a pointer to device
+    // specific details.
+    void *priv_ = {};
 
-    bool valid_ = {};
-
-    uint index_ = {};
-    uint irq_ = {};
-
+    // interrupt handlers that the device-specific layer registers with our layer
     irq_driver_callback irq_driver_callback_ = {};
     config_change_callback config_change_callback_ = {};
 

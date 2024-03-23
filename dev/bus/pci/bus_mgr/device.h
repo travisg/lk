@@ -90,6 +90,7 @@ public:
     uint8_t header_type() const { return config_.header_type & PCI_HEADER_TYPE_MASK; }
 
     status_t read_bars(pci_bar_t bar[6]);
+    ssize_t read_vendor_capability(size_t index, void *buf, size_t buflen);
 
     bool has_msi() const { return msi_cap_; }
     bool has_msix() const { return msix_cap_; }

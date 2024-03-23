@@ -195,11 +195,12 @@ status_t virtio_net_init(virtio_device *dev) {
     dev->bus()->virtio_status_acknowledge_driver();
 
     // XXX check features bits and ack/nak them
-    uint64_t host_features = dev->bus()->virtio_read_host_feature_word(0) | (uint64_t)dev->bus()->virtio_read_host_feature_word(1) << 32;
+    uint64_t host_features = dev->bus()->virtio_read_host_feature_word_64(0);
     dump_feature_bits(host_features);
 
     /* set our irq handler */
     dev->set_irq_callbacks(&virtio_net_irq_driver_callback, nullptr);
+    dev->bus()->unmask_interrupt();
 
     /* set DRIVER_OK */
     dev->bus()->virtio_status_driver_ok();

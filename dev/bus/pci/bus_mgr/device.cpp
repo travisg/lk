@@ -133,6 +133,14 @@ void device::dump(size_t indent) {
             pci_dump_bar(bars_ + b, b);
         }
     }
+
+    capability *cap;
+    list_for_every_entry(&capability_list_, cap, capability, node) {
+        for (size_t i = 0; i < indent + 2; i++) {
+            printf(" ");
+        }
+        printf("capability: offset %#x id %#x\n", cap->config_offset, cap->id);
+    }
 }
 
 status_t device::enable() {
@@ -220,6 +228,27 @@ status_t device::probe_capabilities() {
     return NO_ERROR;
 }
 
+ssize_t device::read_vendor_capability(size_t index, void *buf, size_t buflen) {
+    const capability *cap;
+    list_for_every_entry(&capability_list_, cap, capability, node) {
+        if (cap->id == 0x9) { // vendor specific
+            if (index == 0) {
+                uint8_t len;
+                pci_read_config_byte(loc(), cap->config_offset + 2, &len);
+
+                const size_t readlen = MIN(len, buflen);
+                for (size_t i = 0; i < readlen; i++) {
+                    pci_read_config_byte(loc(), cap->config_offset + i, static_cast<uint8_t *>(buf) + i);
+                }
+                return len;
+            }
+            index--;
+        }
+     }
+
+    return ERR_NOT_FOUND;
+}
+
 status_t device::init_msi_capability(capability *cap) {
     LTRACE_ENTRY;
 
@@ -256,16 +285,21 @@ status_t device::init_msix_capability(capability *cap) {
 status_t device::allocate_irq(uint *irq) {
     LTRACE_ENTRY;
 
-    uint8_t interrupt_line;
-    status_t err = pci_read_config_byte(loc(), PCI_CONFIG_INTERRUPT_LINE, &interrupt_line);
+    uint8_t interrupt_pin;
+    status_t err = pci_read_config_byte(loc(), PCI_CONFIG_INTERRUPT_PIN, &interrupt_pin);
     if (err != NO_ERROR) return err;
 
-    if (interrupt_line == 0) {
+    if (interrupt_pin == 0) {
         return ERR_NO_RESOURCES;
     }
 
     // map the irq number in config space to platform vector space
-    err = platform_pci_int_to_vector(interrupt_line, irq);
+    err = platform_pci_int_to_vector(interrupt_pin, irq);
+    if (err != NO_ERROR) return err;
+
+    // write it back to the pci config in the interrupt line offset
+    pci_write_config_byte(loc(), PCI_CONFIG_INTERRUPT_LINE, *irq);
+
     return err;
 }
 

@@ -95,6 +95,7 @@ status_t virtio_9p_init(virtio_device *dev, uint32_t host_features)
 
     /* set our irq handler */
     dev->set_irq_callbacks(&virtio_9p_irq_driver_callback, nullptr);
+    dev->bus()->unmask_interrupt();
 
     /* set DRIVER_OK */
     dev->bus()->virtio_status_driver_ok();

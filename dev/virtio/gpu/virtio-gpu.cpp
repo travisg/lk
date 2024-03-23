@@ -454,6 +454,7 @@ status_t virtio_gpu_init(virtio_device *dev, uint32_t host_features) {
 
     /* set our irq handler */
     dev->set_irq_callbacks(&virtio_gpu_irq_driver_callback, &virtio_gpu_config_change_callback);
+    dev->bus()->unmask_interrupt();
 
     /* set DRIVER_OK */
     dev->bus()->virtio_status_driver_ok();

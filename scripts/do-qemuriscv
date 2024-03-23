@@ -19,6 +19,7 @@ function HELP {
     echo "-n                : a virtio network device"
     echo "-t                : a virtio tap network device"
     echo "-g                : a virtio display"
+    echo "-P                : PCI based virtio devices"
     echo
     echo "-h for help"
     echo "all arguments after -- are passed to qemu directly"
@@ -36,12 +37,13 @@ DO_DISPLAY=0
 DO_CMPCTMALLOC=0
 DO_MINIHEAP=0
 DO_SUPERVISOR=0
+DO_PCI_VIRTIO=0
 SMP=1
 MEMSIZE=0
 SUDO=""
 PROJECT=""
 
-while getopts cd:ghm:Mmnteu6p:s:S FLAG; do
+while getopts cd:ghm:Mmnteu6p:Ps:S FLAG; do
     case $FLAG in
         c) DO_CMPCTMALLOC=1;;
         d) DO_DISK=1; DISK_IMAGE=$OPTARG;;
@@ -56,6 +58,7 @@ while getopts cd:ghm:Mmnteu6p:s:S FLAG; do
         s) SMP=$OPTARG;;
         S) DO_SUPERVISOR=1;;
         p) PROJECT=$OPTARG;;
+        P) DO_PCI_VIRTIO=1;;
         h) HELP;;
         \?)
             echo unrecognized option
@@ -115,6 +118,22 @@ if [[ -z "$MEMSIZE" ]]; then
     PROJECT=$_MEMSIZE
 fi
 
+if (( $DO_PCI_VIRTIO )); then
+    VIRTIO_BLOCK_DEVICE="virtio-blk-pci"
+    VIRTIO_NET_DEVICE="virtio-net-pci"
+    VIRTIO_GPU_DEVICE="virtio-gpu-pci"
+    VIRTIO_KEYBOARD_DEVICE="virtio-keyboard-pci"
+    VIRTIO_MOUSE_DEVICE="virtio-mouse-pci"
+    VIRTIO_9P_DEVICE="virtio-9p-pci"
+else
+    VIRTIO_BLOCK_DEVICE="virtio-blk-device"
+    VIRTIO_NET_DEVICE="virtio-net-device"
+    VIRTIO_GPU_DEVICE="virtio-gpu-device"
+    VIRTIO_KEYBOARD_DEVICE="virtio-keyboard-device"
+    VIRTIO_MOUSE_DEVICE="virtio-mouse-device"
+    VIRTIO_9P_DEVICE="virtio-9p-device"
+fi
+
 # construct a list of args based on previous variables
 ARGS=" -machine $MACHINE"
 #ARGS+=",dumpdtb=riscv.dtb" # uncheck this to get a binary dump of the device tree for this config
@@ -133,11 +152,11 @@ if [[ ! -z "$BIOS" ]]; then
 fi
 if (( $DO_DISK )); then
     ARGS+=" -drive if=none,file=${DISK_IMAGE},id=blk,format=raw"
-    ARGS+=" -device virtio-blk-device,drive=blk"
+    ARGS+=" -device ${VIRTIO_BLOCK_DEVICE},drive=blk"
 fi
 if (( $DO_NET )); then
     ARGS+=" -netdev user,id=vmnic,hostname=qemu"
-    ARGS+=" -device virtio-net-device,netdev=vmnic"
+    ARGS+=" -device ${VIRTIO_NET_DEVICE},netdev=vmnic"
 fi
 if (( $DO_NET_TAP )); then
     # quick note to enable tap interface
@@ -147,13 +166,13 @@ if (( $DO_NET_TAP )); then
     # sudo ifconfig ${IFNAME} up
     # sudo ip link set ${IFNAME} master ${BRIDGE}
     ARGS+=" -netdev tap,id=vmnic,ifname=qemu0,script=no,downscript=no"
-    ARGS+=" -device virtio-net-device,netdev=vmnic"
+    ARGS+=" -device ${VIRTIO_NET_DEVICE},netdev=vmnic"
     #SUDO="sudo "
 fi
 if (( $DO_DISPLAY )); then
-    ARGS+=" -device virtio-gpu-device -serial stdio"
-    ARGS+=" -device virtio-keyboard-device"
-    ARGS+=" -device virtio-mouse-device"
+    ARGS+=" -device ${VIRTIO_GPU_DEVICE} -serial stdio"
+    ARGS+=" -device ${VIRTIO_KEYBOARD_DEVICE}"
+    ARGS+=" -device ${VIRTIO_MOUSE_DEVICE}"
 else
     ARGS+=" -nographic"
 fi

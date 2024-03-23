@@ -192,6 +192,7 @@ handler_return virtio_device::handle_queue_interrupt() {
 
         vring &ring = ring_[r];
 
+        LTRACEF("desc %p, avail %p, used %p\n", ring.desc, ring.avail, ring.used);
         LTRACEF("ring %u: used flags 0x%hx idx 0x%hx last_used %u\n", r, ring.used->flags, ring.used->idx, ring.last_used);
 
         uint cur_idx = ring.used->idx;

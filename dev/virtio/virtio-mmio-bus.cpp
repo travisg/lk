@@ -79,13 +79,6 @@ STATIC_ASSERT(sizeof(struct virtio_mmio_config) == 0x100);
 
 #define VIRTIO_MMIO_MAGIC 0x74726976 // 'virt'
 
-#define VIRTIO_STATUS_ACKNOWLEDGE (1<<0)
-#define VIRTIO_STATUS_DRIVER      (1<<1)
-#define VIRTIO_STATUS_DRIVER_OK   (1<<2)
-#define VIRTIO_STATUS_FEATURES_OK (1<<3)
-#define VIRTIO_STATUS_DEVICE_NEEDS_RESET (1<<6)
-#define VIRTIO_STATUS_FAILED      (1<<7)
-
 // TODO: switch to using reg.h mmio_ accessors
 void virtio_mmio_bus::virtio_reset_device() {
     mmio_config_->status = 0;
@@ -193,25 +186,9 @@ int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride) 
     for (uint i = 0; i < count; i++) {
         volatile auto *mmio = reinterpret_cast<virtio_mmio_config *>(static_cast<uint8_t *>(ptr) + i * stride);
 
-        auto *bus = new virtio_mmio_bus(mmio);
-        auto *dev = new virtio_device(bus);
-        devices[i] = dev;
-
-        dev->index_ = i;
-        dev->irq_ = irqs[i];
-        dev->config_ptr_ = (void *)mmio->config;
-
-        mask_interrupt(irqs[i]);
-        register_int_handler(irqs[i], &virtio_mmio_bus::virtio_mmio_irq, static_cast<void *>(dev));
-
-        LTRACEF("looking at %p: magic 0x%x version 0x%x did 0x%x vid 0x%x\n",
-                mmio, mmio->magic, mmio->version, mmio->device_id, mmio->vendor_id);
-
         if (mmio->magic != VIRTIO_MMIO_MAGIC) {
             continue;
         }
-
-        // TODO: handle version 2
 
         if (LOCAL_TRACE) {
             if (mmio->device_id != 0) {
@@ -219,17 +196,33 @@ int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride) 
             }
         }
 
+        // TODO: handle version 2
+        // Unclear how to get QEMU to handle version 2 mmio interfaces
+        if (mmio->version != 1) {
+            printf("skipping virtio mmio version 2 device\n");
+            continue;
+        }
+
+        auto *bus = new virtio_mmio_bus(mmio);
+        auto *dev = new virtio_device(bus);
+        devices[i] = dev;
+
+        dev->set_config_ptr((void *)mmio->config);
+
+        bus->set_irq(irqs[i]);
+        bus->mask_interrupt();
+        register_int_handler(irqs[i], &virtio_mmio_bus::virtio_mmio_irq, static_cast<void *>(dev));
+
+        LTRACEF("looking at %p: magic 0x%x version 0x%x did 0x%x vid 0x%x\n",
+                mmio, mmio->magic, mmio->version, mmio->device_id, mmio->vendor_id);
+
 #if WITH_DEV_VIRTIO_BLOCK
         if (mmio->device_id == 2) { // block device
             LTRACEF("found block device\n");
 
             status_t err = virtio_block_init(dev, bus->virtio_read_host_feature_word(0));
             if (err >= 0) {
-                // good device
-                dev->valid_ = true;
-
-                if (dev->irq_driver_callback_)
-                    unmask_interrupt(dev->irq_);
+                found++;
             }
         }
 #endif // WITH_DEV_VIRTIO_BLOCK
@@ -239,11 +232,7 @@ int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride) 
 
             status_t err = virtio_net_init(dev);
             if (err >= 0) {
-                // good device
-                dev->valid_ = true;
-
-                if (dev->irq_driver_callback_)
-                    unmask_interrupt(dev->irq_);
+                found++;
             }
         }
 #endif // WITH_DEV_VIRTIO_NET
@@ -253,12 +242,7 @@ int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride) 
 
             status_t err = virtio_9p_init(dev, bus->virtio_read_host_feature_word((0)));
             if (err >= 0) {
-                // good device
-                dev->valid_ = true;
-
-                if (dev->irq_driver_callback_)
-                    unmask_interrupt(dev->irq_);
-
+                found++;
                 virtio_9p_start(dev);
             }
         }
@@ -269,19 +253,11 @@ int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride) 
 
             status_t err = virtio_gpu_init(dev, bus->virtio_read_host_feature_word( 0));
             if (err >= 0) {
-                // good device
-                dev->valid_ = true;
-
-                if (dev->irq_driver_callback_)
-                    unmask_interrupt(dev->irq_);
-
+                found++;
                 virtio_gpu_start(dev);
             }
         }
 #endif // WITH_DEV_VIRTIO_GPU
-
-        if (dev->valid_)
-            found++;
     }
 
     return found;

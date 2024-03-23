@@ -98,6 +98,9 @@ status_t pci_bus_mgr_allocate_msi(const pci_location_t loc, size_t num_requested
 // allocate a regular irq for this device and return it in irqbase
 status_t pci_bus_mgr_allocate_irq(const pci_location_t loc, uint *irqbase);
 
+// XXX sort this nicely
+ssize_t pci_read_vendor_capability(const pci_location_t loc, size_t index, void *buf, size_t buflen);
+
 // return a pointer to a formatted string
 const char *pci_loc_string(pci_location_t loc, char out_str[14]);
 

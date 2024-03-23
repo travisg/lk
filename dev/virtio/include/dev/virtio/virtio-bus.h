@@ -8,6 +8,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <platform/interrupts.h>
 
 class virtio_bus {
 public:
@@ -21,4 +22,23 @@ public:
     virtual void virtio_status_driver_ok() = 0;
     virtual void virtio_kick(uint16_t ring_index) = 0;
     virtual void register_ring(uint32_t page_size, uint32_t queue_sel, uint32_t queue_num, uint32_t queue_align, uint32_t queue_pfn) = 0;
+
+    uint64_t virtio_read_host_feature_word_64(uint32_t word) {
+        return virtio_read_host_feature_word(word) | static_cast<uint64_t>(virtio_read_host_feature_word(word + 1)) << 32;
+    }
+
+    // A simple set of routines to handle a single IRQ.
+    // TODO: rethink where this goes in a more complicated MSI based solution.
+    void set_irq(uint32_t irq) { irq_ = irq; }
+
+    void mask_interrupt() {
+        ::mask_interrupt(irq_);
+    }
+
+    void unmask_interrupt() {
+        ::unmask_interrupt(irq_);
+    }
+
+private:
+    uint32_t irq_ {};
 };
