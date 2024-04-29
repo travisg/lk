@@ -566,6 +566,23 @@ static void convert_args(int argc, console_cmd_args *argv) {
     }
 }
 
+typedef struct background_cmd_args {
+    const console_cmd *command;
+    int argc;
+    console_cmd_args *args;
+} background_cmd_args;
+
+static int background_command_exec(void *arg)
+{
+    background_cmd_args *bg_args = (background_cmd_args *)arg;
+    int ret = bg_args->command->cmd_callback(bg_args->argc, bg_args->args);
+    for (int i = 0; i < bg_args->argc; i++) {
+        free((void *)bg_args->args[i].str);
+    }
+    free((void *)bg_args->args);
+    free((void *)bg_args);
+    return ret;
+}
 
 static status_t command_loop(console_t *con, int (*get_line)(const char **, void *), void *get_line_cookie, bool showprompt, bool locked) {
     bool exit;
@@ -637,7 +654,23 @@ static status_t command_loop(console_t *con, int (*get_line)(const char **, void
             mutex_acquire(&con->lock);
 
         con->abort_script = false;
-        con->lastresult = command->cmd_callback(argc, args);
+        if (strcmp(args[argc - 1].str, "&") == 0) { // background execution
+            background_cmd_args *bg_args =
+                (background_cmd_args *)malloc(sizeof(background_cmd_args));
+            bg_args->command = command;
+            bg_args->argc = argc - 1;
+            bg_args->args = (console_cmd_args *)malloc(argc * sizeof(console_cmd_args));
+            for (int i = 0; i < argc; i++) {
+                memcpy(&bg_args->args[i], &args[i], sizeof(console_cmd_args));
+                bg_args->args[i].str = strdup(args[i].str);
+            }
+            thread_t *thr = thread_create("background_command_exec", background_command_exec,
+                        bg_args, DEFAULT_PRIORITY,
+                        DEFAULT_STACK_SIZE);
+            con->lastresult = thread_resume(thr);
+        } else {
+            con->lastresult = command->cmd_callback(argc, args);
+        }
 
 #if WITH_LIB_ENV
         bool report_result;
