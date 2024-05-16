@@ -150,11 +150,11 @@ void register_int_handler_msi(unsigned int vector, int_handler handler, void *ar
 #define GICD_SPENDSGIR(n)       (GICD_OFFSET + 0xf20 + (n) * 4)
 
 #define DIV_ROUND_UP(n,d) (((n) + (d) - 1) / (d))
-#define GIC_REG_COUNT(bit_per_reg) DIV_ROUND_UP(MAX_INT, (bit_per_reg))
-#define DEFINE_GIC_SHADOW_REG(name, bit_per_reg, init_val, init_from) \
-    uint32_t (name)[GIC_REG_COUNT(bit_per_reg)] = { \
-        [(init_from / bit_per_reg) ... \
-         (GIC_REG_COUNT(bit_per_reg) - 1)] = (init_val) \
+#define GIC_REG_COUNT(records_per_reg) DIV_ROUND_UP(MAX_INT, (records_per_reg))
+#define DEFINE_GIC_SHADOW_REG(name, records_per_reg, init_val, init_from) \
+    uint32_t (name)[GIC_REG_COUNT(records_per_reg)] = { \
+        [(init_from / records_per_reg) ... \
+         (GIC_REG_COUNT(records_per_reg) - 1)] = (init_val) \
     }
 
 #if WITH_LIB_SM
