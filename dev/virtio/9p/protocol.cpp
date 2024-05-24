@@ -125,7 +125,7 @@ char *pdu_readstr(struct p9_fcall *pdu)
         return NULL;
     }
 
-    str = calloc(len + 1, sizeof(char));
+    str = (char *)calloc(len + 1, sizeof(char));
     if (!str) {
         return NULL;
     }
@@ -166,7 +166,7 @@ uint8_t *pdu_readdata(struct p9_fcall *pdu, uint32_t *count)
     if (*count == 0)
         return NULL;
 
-    data = calloc(*count, sizeof(uint8_t));
+    data = (uint8_t *)calloc(*count, sizeof(uint8_t));
     if (!data)
         return NULL;
 

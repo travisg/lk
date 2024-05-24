@@ -176,7 +176,7 @@ status_t virtio_net_init(struct virtio_device *dev) {
     LTRACEF("dev %p\n", dev);
 
     /* allocate a new net device */
-    struct virtio_net_dev *ndev = calloc(1, sizeof(struct virtio_net_dev));
+    struct virtio_net_dev *ndev = (virtio_net_dev *)calloc(1, sizeof(struct virtio_net_dev));
     if (!ndev)
         return ERR_NO_MEMORY;
 
@@ -245,22 +245,22 @@ static status_t virtio_net_queue_tx_pktbuf(struct virtio_net_dev *ndev, pktbuf_t
         return ERR_NO_MEMORY;
 
     /* point our header to the base of the first pktbuf */
-    struct virtio_net_hdr *hdr = pktbuf_append(p, sizeof(struct virtio_net_hdr) - 2);
+    struct virtio_net_hdr *hdr = (virtio_net_hdr *)pktbuf_append(p, sizeof(struct virtio_net_hdr) - 2);
     memset(hdr, 0, p->dlen);
 
     spin_lock_saved_state_t state;
     spin_lock_irqsave(&ndev->lock, state);
 
-    /* only queue if we have enough tx descriptors */
-    if (ndev->tx_pending_count + 2 > TX_RING_SIZE)
-        goto nodesc;
+    struct vring_desc *desc = {};
 
-    /* allocate a chain of descriptors for our transfer */
-    struct vring_desc *desc = virtio_alloc_desc_chain(vdev, RING_TX, 2, &i);
+    /* only queue if we have enough tx descriptors */
+    if (ndev->tx_pending_count + 2 <= TX_RING_SIZE) {
+        /* allocate a chain of descriptors for our transfer */
+        desc = virtio_alloc_desc_chain(vdev, RING_TX, 2, &i);
+    }
     if (!desc) {
         spin_unlock_irqrestore(&ndev->lock, state);
 
-nodesc:
         TRACEF("out of virtio tx descriptors, tx_pending_count %u\n", ndev->tx_pending_count);
         pktbuf_free(p, true);
 
@@ -449,7 +449,7 @@ static int virtio_net_rx_worker(void *arg) {
             LTRACEF("got packet len %u\n", p->dlen);
 
             /* process our packet */
-            struct virtio_net_hdr *hdr = pktbuf_consume(p, sizeof(struct virtio_net_hdr) - 2);
+            struct virtio_net_hdr *hdr = (virtio_net_hdr *)pktbuf_consume(p, sizeof(struct virtio_net_hdr) - 2);
             if (hdr) {
                 /* call up into the stack */
                 minip_rx_driver_callback(p);

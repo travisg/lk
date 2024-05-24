@@ -13,6 +13,8 @@
 #include <sys/types.h>
 #include <dev/virtio/virtio_ring.h>
 
+__BEGIN_CDECLS
+
 /* detect a virtio mmio hardware block
  * returns number of devices found */
 int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride);
@@ -70,4 +72,5 @@ void virtio_submit_chain(struct virtio_device *dev, uint ring_index, uint16_t de
 
 void virtio_kick(struct virtio_device *dev, uint ring_idnex);
 
+__END_CDECLS
 

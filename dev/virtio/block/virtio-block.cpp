@@ -161,7 +161,7 @@ status_t virtio_block_init(struct virtio_device *dev, uint32_t host_features) {
     LTRACEF("dev %p, host_features %#x\n", dev, host_features);
 
     /* allocate a new block device */
-    struct virtio_block_dev *bdev = malloc(sizeof(struct virtio_block_dev));
+    struct virtio_block_dev *bdev = (virtio_block_dev *)malloc(sizeof(struct virtio_block_dev));
     if (!bdev)
         return ERR_NO_MEMORY;
 
@@ -171,7 +171,7 @@ status_t virtio_block_init(struct virtio_device *dev, uint32_t host_features) {
     bdev->dev = dev;
     dev->priv = bdev;
 
-    bdev->blk_req = memalign(sizeof(struct virtio_blk_req), sizeof(struct virtio_blk_req));
+    bdev->blk_req = (virtio_blk_req *)memalign(sizeof(struct virtio_blk_req), sizeof(struct virtio_blk_req));
 #if WITH_KERNEL_VM
     bdev->blk_req_phys = vaddr_to_paddr(bdev->blk_req);
 #else

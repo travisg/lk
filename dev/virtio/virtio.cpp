@@ -97,7 +97,9 @@ static enum handler_return virtio_mmio_irq(void *arg) {
                 LTRACEF("id %u, len %u\n", used_elem->id, used_elem->len);
 
                 DEBUG_ASSERT(dev->irq_driver_callback);
-                ret |= dev->irq_driver_callback(dev, r, used_elem);
+                if (dev->irq_driver_callback(dev, r, used_elem) == INT_RESCHEDULE) {
+                    ret = INT_RESCHEDULE;
+                }
 
                 ring->last_used = (ring->last_used + 1) & ring->num_mask;
             }
@@ -107,7 +109,9 @@ static enum handler_return virtio_mmio_irq(void *arg) {
         dev->mmio_config->interrupt_ack = 0x2;
 
         if (dev->config_change_callback) {
-            ret |= dev->config_change_callback(dev);
+            if (dev->config_change_callback(dev) == INT_RESCHEDULE) {
+                ret = INT_RESCHEDULE;
+            }
         }
     }
 
@@ -124,7 +128,7 @@ int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride) 
     DEBUG_ASSERT(!devices);
 
     /* allocate an array big enough to hold a list of devices */
-    devices = calloc(count, sizeof(struct virtio_device));
+    devices = (virtio_device *)calloc(count, sizeof(struct virtio_device));
     if (!devices)
         return ERR_NO_MEMORY;
 

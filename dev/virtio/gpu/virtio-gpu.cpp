@@ -24,7 +24,7 @@
 #include <kernel/vm.h>
 #endif
 
-#include "virtio_gpu.h"
+#include "virtio-gpu.h"
 
 #define LOCAL_TRACE 0
 
@@ -414,7 +414,7 @@ status_t virtio_gpu_init(struct virtio_device *dev, uint32_t host_features) {
     LTRACEF("dev %p, host_features 0x%x\n", dev, host_features);
 
     /* allocate a new gpu device */
-    struct virtio_gpu_dev *gdev = malloc(sizeof(struct virtio_gpu_dev));
+    struct virtio_gpu_dev *gdev = (virtio_gpu_dev *)malloc(sizeof(struct virtio_gpu_dev));
     if (!gdev)
         return ERR_NO_MEMORY;
 

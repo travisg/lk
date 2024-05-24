@@ -173,13 +173,14 @@ struct virtio_gpu_resource_detach_backing {
 
 /* VIRTIO_GPU_RESP_OK_DISPLAY_INFO */
 #define VIRTIO_GPU_MAX_SCANOUTS 16
+struct virtio_gpu_display_one {
+    struct virtio_gpu_rect r;
+    uint32_t enabled;
+    uint32_t flags;
+};
 struct virtio_gpu_resp_display_info {
     struct virtio_gpu_ctrl_hdr hdr;
-    struct virtio_gpu_display_one {
-        struct virtio_gpu_rect r;
-        uint32_t enabled;
-        uint32_t flags;
-    } pmodes[VIRTIO_GPU_MAX_SCANOUTS];
+    struct virtio_gpu_display_one pmodes[VIRTIO_GPU_MAX_SCANOUTS];
 };
 
 #define VIRTIO_GPU_EVENT_DISPLAY (1 << 0)

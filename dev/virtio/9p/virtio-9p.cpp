@@ -59,7 +59,7 @@ status_t virtio_9p_init(struct virtio_device *dev, uint32_t host_features)
     dump_feature_bits(host_features);
 
     /* allocate a new 9p device */
-    struct virtio_9p_dev *p9dev = calloc(1, sizeof(struct virtio_9p_dev));
+    struct virtio_9p_dev *p9dev = (virtio_9p_dev *)calloc(1, sizeof(struct virtio_9p_dev));
     if (!p9dev)
         return ERR_NO_MEMORY;
 
@@ -123,7 +123,9 @@ status_t virtio_9p_start(struct virtio_device *dev)
     virtio_9p_msg_t tver = {
         .msg_type = P9_TVERSION,
         .tag = P9_TAG_NOTAG,
-        .msg.tversion = {.msize = p9dev->msize, .version = "9P2000.L"}
+        .msg = {
+            .tversion = { .msize = p9dev->msize, .version = "9P2000.L"}
+        }
     };
     virtio_9p_msg_t rver = {};
 

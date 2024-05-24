@@ -36,7 +36,7 @@
 static status_t pdu_init(struct p9_fcall *pdu, size_t size)
 {
     vmm_alloc_contiguous(vmm_get_kernel_aspace(), "virtio_9p_pdu", size,
-                         (void *)&pdu->sdata, 0, 0,
+                         (void **)&pdu->sdata, 0, 0,
                          ARCH_MMU_FLAG_UNCACHED_DEVICE);
     if (!pdu->sdata)
         return ERR_NO_MEMORY;
@@ -128,7 +128,7 @@ static void p9_req_receive(struct p9_req *req,
                            virtio_9p_msg_t *rmsg)
 {
     pdu_readd(&req->rc);
-    rmsg->msg_type = pdu_readb(&req->rc);
+    rmsg->msg_type = (virtio_9p_msg_type_t)pdu_readb(&req->rc);
     rmsg->tag = pdu_readw(&req->rc);
 #if LOCAL_TRACE >= 2
     LTRACEF("req->rc.sdata (%p) req->rc.size (%u)\n", req->rc.sdata,
@@ -182,7 +182,7 @@ status_t virtio_9p_rpc(struct virtio_device *dev, const virtio_9p_msg_t *tmsg,
 {
     LTRACEF("dev (%p) tmsg (%p) rmsg (%p)\n", dev, tmsg, rmsg);
 
-    struct virtio_9p_dev *p9dev = dev->priv;
+    struct virtio_9p_dev *p9dev = (virtio_9p_dev *)dev->priv;
     struct p9_req *req = &p9dev->req;
     status_t ret;
 
