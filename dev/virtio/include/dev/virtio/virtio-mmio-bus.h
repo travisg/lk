@@ -8,8 +8,7 @@
 #pragma once
 
 #include <stdint.h>
-#include <assert.h>
-#include <lk/trace.h>
+#include <sys/types.h>
 
 #include <dev/virtio/virtio-bus.h>
 
@@ -17,8 +16,8 @@ struct virtio_mmio_config;
 
 class virtio_mmio_bus final : public virtio_bus {
 public:
-    virtio_mmio_bus() = default;
-    virtual ~virtio_mmio_bus() = default;
+    explicit virtio_mmio_bus(volatile virtio_mmio_config *config) : mmio_config_(config) {}
+    ~virtio_mmio_bus() override = default;
 
     void virtio_reset_device() override;
     void virtio_status_acknowledge_driver() override;
@@ -29,5 +28,10 @@ public:
 
     void register_ring(uint32_t page_size, uint32_t queue_sel, uint32_t queue_num, uint32_t queue_align, uint32_t queue_pfn) override;
 
-    volatile struct virtio_mmio_config *mmio_config_ = {};
+    static handler_return virtio_mmio_irq(void *arg);
+
+private:
+    volatile struct virtio_mmio_config *mmio_config_;
 };
+
+void dump_mmio_config(const volatile virtio_mmio_config *mmio);

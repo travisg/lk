@@ -10,21 +10,19 @@
 #include <lk/compiler.h>
 #include <assert.h>
 #include <sys/types.h>
+#include <dev/virtio.h>
 #include <dev/virtio/virtio_ring.h>
 #include <dev/virtio/virtio-bus.h>
 
-struct virtio_mmio_config;
-
-// TODO: move as const inside virio_device
-#define MAX_VIRTIO_RINGS 4
-
 class virtio_device {
 public:
-    virtio_device() = default;
-    virtual ~virtio_device() = default;
+    explicit virtio_device(virtio_bus *bus) : bus_(bus) {}
+    virtual ~virtio_device() {
+        delete bus_;
+    }
 
     /* api used by devices to interact with the virtio bus */
-    status_t virtio_alloc_ring(uint index, uint16_t len) __NONNULL();
+    status_t virtio_alloc_ring(uint index, uint16_t len);
 
     /* add a descriptor at index desc_index to the free list on ring_index */
     void virtio_free_desc(uint ring_index, uint16_t desc_index);
@@ -36,14 +34,13 @@ public:
     vring_desc *virtio_alloc_desc_chain(uint ring_index, size_t count, uint16_t *start_index);
 
     inline vring_desc *virtio_desc_index_to_desc(uint ring_index, uint16_t desc_index) {
+        DEBUG_ASSERT(ring_index < MAX_VIRTIO_RINGS);
         DEBUG_ASSERT(desc_index != 0xffff);
         return &ring_[ring_index].desc[desc_index];
     }
 
     /* submit a chain to the avail list */
     void virtio_submit_chain(uint ring_index, uint16_t desc_index);
-
-    static enum handler_return virtio_mmio_irq(void *arg);
 
     // accessors
     void *priv() { return priv_; }
@@ -64,7 +61,16 @@ public:
         config_change_callback_ = config;
     }
 
+    // From low level bus layer
+    handler_return handle_queue_interrupt();
+    handler_return handle_config_interrupt();
+
+    // TODO: allow an aribitrary number of rings
+    static const size_t MAX_VIRTIO_RINGS = 4;
+
 private:
+    friend class virtio_bus;
+
     // XXX move this into constructor
     friend int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride);
 
@@ -91,7 +97,4 @@ private:
     vring ring_[MAX_VIRTIO_RINGS];
 };
 
-
-void dump_mmio_config(const volatile virtio_mmio_config *mmio);
-void virtio_dump_desc(const vring_desc *desc);
 

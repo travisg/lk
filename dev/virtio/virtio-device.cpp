@@ -16,13 +16,14 @@
 #include <lk/pow2.h>
 #include <lk/reg.h>
 #include <arch/ops.h>
+#include <sys/types.h>
+#include <dev/virtio/virtio-mmio-bus.h>
+
 #if WITH_KERNEL_VM
 #include <kernel/vm.h>
 #endif
 
 #include "virtio_priv.h"
-
-#include <dev/virtio/virtio-mmio-bus.h>
 
 #define LOCAL_TRACE 0
 
@@ -170,58 +171,46 @@ status_t virtio_device::virtio_alloc_ring(uint index, uint16_t len) {
     return NO_ERROR;
 }
 
-// TODO: split up and move into virtio-mmio-bus and here
-enum handler_return virtio_device::virtio_mmio_irq(void *arg) {
-    virtio_device *dev = (virtio_device *)arg;
-    LTRACEF("dev %p, index %u\n", dev, dev->index_);
+handler_return virtio_device::handle_queue_interrupt() {
+    LTRACE_ENTRY;
+    handler_return ret = INT_NO_RESCHEDULE;
 
-    virtio_mmio_bus *bus = reinterpret_cast<virtio_mmio_bus *>(dev->bus());
+    /* cycle through all the active rings */
+    for (uint r = 0; r < MAX_VIRTIO_RINGS; r++) {
+        if ((active_rings_bitmap_ & (1<<r)) == 0)
+            continue;
 
-    uint32_t irq_status = bus->mmio_config_->interrupt_status;
-    LTRACEF("status 0x%x\n", irq_status);
+        vring *ring = &ring_[r];
+        LTRACEF("ring %u: used flags 0x%hx idx 0x%hx last_used %u\n", r, ring->used->flags, ring->used->idx, ring->last_used);
 
-    enum handler_return ret = INT_NO_RESCHEDULE;
-    if (irq_status & 0x1) { /* used ring update */
-        // XXX is this safe?
-        bus->mmio_config_->interrupt_ack = 0x1;
+        uint cur_idx = ring->used->idx;
+        for (uint i = ring->last_used; i != (cur_idx & ring->num_mask); i = (i + 1) & ring->num_mask) {
+            LTRACEF("looking at idx %u\n", i);
 
-        /* cycle through all the active rings */
-        for (uint r = 0; r < MAX_VIRTIO_RINGS; r++) {
-            if ((dev->active_rings_bitmap_ & (1<<r)) == 0)
-                continue;
+            // process chain
+            vring_used_elem *used_elem = &ring->used->ring[i];
+            LTRACEF("id %u, len %u\n", used_elem->id, used_elem->len);
 
-            vring *ring = &dev->ring_[r];
-            LTRACEF("ring %u: used flags 0x%hx idx 0x%hx last_used %u\n", r, ring->used->flags, ring->used->idx, ring->last_used);
-
-            uint cur_idx = ring->used->idx;
-            for (uint i = ring->last_used; i != (cur_idx & ring->num_mask); i = (i + 1) & ring->num_mask) {
-                LTRACEF("looking at idx %u\n", i);
-
-                // process chain
-                vring_used_elem *used_elem = &ring->used->ring[i];
-                LTRACEF("id %u, len %u\n", used_elem->id, used_elem->len);
-
-                DEBUG_ASSERT(dev->irq_driver_callback_);
-                if (dev->irq_driver_callback_(dev, r, used_elem) == INT_RESCHEDULE) {
-                    ret = INT_RESCHEDULE;
-                }
-
-                ring->last_used = (ring->last_used + 1) & ring->num_mask;
-            }
-        }
-    }
-    if (irq_status & 0x2) { /* config change */
-        bus->mmio_config_->interrupt_ack = 0x2;
-
-        if (dev->config_change_callback_) {
-            if (dev->config_change_callback_(dev) == INT_RESCHEDULE) {
+            DEBUG_ASSERT(irq_driver_callback_);
+            if (irq_driver_callback_(this, r, used_elem) == INT_RESCHEDULE) {
                 ret = INT_RESCHEDULE;
             }
+
+            ring->last_used = (ring->last_used + 1) & ring->num_mask;
         }
     }
-
-    LTRACEF("exiting irq\n");
 
     return ret;
 }
 
+handler_return virtio_device::handle_config_interrupt() {
+    LTRACE_ENTRY;
+    handler_return ret = INT_NO_RESCHEDULE;
+    if (config_change_callback_) {
+        if (config_change_callback_(this) == INT_RESCHEDULE) {
+            ret = INT_RESCHEDULE;
+        }
+    }
+
+    return ret;
+}

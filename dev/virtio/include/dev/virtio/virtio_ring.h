@@ -169,5 +169,7 @@ static inline int vring_need_event(uint16_t event_idx, uint16_t new_idx, uint16_
     return (uint16_t)(new_idx - event_idx - 1) < (uint16_t)(new_idx - old);
 }
 
+void virtio_dump_desc(const struct vring_desc *desc);
+
 #endif /* _UAPI_LINUX_VIRTIO_RING_H */
 
