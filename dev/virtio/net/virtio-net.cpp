@@ -114,7 +114,7 @@ struct virtio_net_dev {
     struct virtio_device *dev;
     bool started;
 
-    struct virtio_net_config *config;
+    const virtio_net_config *config;
 
     spin_lock_t lock;
     event_t rx_event;
@@ -182,27 +182,27 @@ status_t virtio_net_init(virtio_device *dev) {
         return ERR_NO_MEMORY;
 
     ndev->dev = dev;
-    dev->priv_ = ndev;
+    dev->set_priv(ndev);
     ndev->started = false;
 
     ndev->lock = SPIN_LOCK_INITIAL_VALUE;
     event_init(&ndev->rx_event, false, EVENT_FLAG_AUTOUNSIGNAL);
     list_initialize(&ndev->completed_rx_queue);
 
-    ndev->config = (virtio_net_config *)dev->config_ptr_;
+    ndev->config = (const virtio_net_config *)dev->get_config_ptr();
 
     /* ack and set the driver status bit */
-    dev->virtio_status_acknowledge_driver();
+    dev->bus()->virtio_status_acknowledge_driver();
 
     // XXX check features bits and ack/nak them
-    uint64_t host_features = dev->virtio_read_host_feature_word(0) | (uint64_t)dev->virtio_read_host_feature_word(1) << 32;
+    uint64_t host_features = dev->bus()->virtio_read_host_feature_word(0) | (uint64_t)dev->bus()->virtio_read_host_feature_word(1) << 32;
     dump_feature_bits(host_features);
 
     /* set our irq handler */
-    dev->irq_driver_callback_ = &virtio_net_irq_driver_callback;
+    dev->set_irq_callbacks(&virtio_net_irq_driver_callback, nullptr);
 
     /* set DRIVER_OK */
-    dev->virtio_status_driver_ok();
+    dev->bus()->virtio_status_driver_ok();
 
     /* allocate a pair of virtio rings */
     dev->virtio_alloc_ring(RING_RX, RX_RING_SIZE); // rx
@@ -292,7 +292,7 @@ static status_t virtio_net_queue_tx_pktbuf(struct virtio_net_dev *ndev, pktbuf_t
     vdev->virtio_submit_chain(RING_TX, i);
 
     /* kick it off */
-    vdev->virtio_kick(RING_TX);
+    vdev->bus()->virtio_kick(RING_TX);
 
     spin_unlock_irqrestore(&ndev->lock, state);
 
@@ -356,7 +356,7 @@ static status_t virtio_net_queue_rx(struct virtio_net_dev *ndev, pktbuf_t *p) {
     vdev->virtio_submit_chain(RING_RX, i);
 
     /* kick it off */
-    vdev->virtio_kick(RING_RX);
+    vdev->bus()->virtio_kick(RING_RX);
 
     spin_unlock_irqrestore(&ndev->lock, state);
 
@@ -364,7 +364,7 @@ static status_t virtio_net_queue_rx(struct virtio_net_dev *ndev, pktbuf_t *p) {
 }
 
 static enum handler_return virtio_net_irq_driver_callback(struct virtio_device *dev, uint ring, const struct vring_used_elem *e) {
-    struct virtio_net_dev *ndev = (struct virtio_net_dev *)dev->priv_;
+    struct virtio_net_dev *ndev = (struct virtio_net_dev *)dev->priv();
 
     LTRACEF("dev %p, ring %u, e %p, id %u, len %u\n", dev, ring, e, e->id, e->len);
 

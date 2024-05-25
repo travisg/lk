@@ -65,7 +65,7 @@ status_t virtio_9p_init(virtio_device *dev, uint32_t host_features)
         return ERR_NO_MEMORY;
 
     p9dev->dev = dev;
-    dev->priv_ = p9dev;
+    dev->set_priv(p9dev);
     p9dev->lock = SPIN_LOCK_INITIAL_VALUE;
     // Assuming there can be only one outstanding request.
     p9dev->req.status = P9_REQ_S_UNKNOWN;
@@ -76,28 +76,28 @@ status_t virtio_9p_init(virtio_device *dev, uint32_t host_features)
     list_add_tail(&p9_devices, &p9dev->list);
 
     /* make sure the device is reset */
-    dev->virtio_reset_device();
+    dev->bus()->virtio_reset_device();
 
-    p9dev->config = (struct virtio_9p_config *)dev->config_ptr_;
-#if LOCAL_TRACE
-    LTRACEF("tag_len: %u\n", p9dev->config->tag_len);
-    LTRACEF("tag: ");
-    for (int i = 0; i < p9dev->config->tag_len; ++i) {
-        printf("%c", p9dev->config->tag[i]);
+    p9dev->config = (const virtio_9p_config *)dev->get_config_ptr();
+    if (LOCAL_TRACE) {
+        LTRACEF("tag_len: %u\n", p9dev->config->tag_len);
+        LTRACEF("tag: ");
+        for (int i = 0; i < p9dev->config->tag_len; ++i) {
+            printf("%c", p9dev->config->tag[i]);
+        }
+        printf("\n");
     }
-    printf("\n");
-#endif
 
     /* ack and set the driver status bit */
-    dev->virtio_status_acknowledge_driver();
+    dev->bus()->virtio_status_acknowledge_driver();
 
     dev->virtio_alloc_ring(VIRTIO_9P_RING_IDX, VIRTIO_9P_RING_SIZE);
 
     /* set our irq handler */
-    dev->irq_driver_callback_ = &virtio_9p_irq_driver_callback;
+    dev->set_irq_callbacks(&virtio_9p_irq_driver_callback, nullptr);
 
     /* set DRIVER_OK */
-    dev->virtio_status_driver_ok();
+    dev->bus()->virtio_status_driver_ok();
 
     // register a fake block device
     static uint8_t found_index = 0;
@@ -117,7 +117,7 @@ status_t virtio_9p_init(virtio_device *dev, uint32_t host_features)
 
 status_t virtio_9p_start(virtio_device *dev)
 {
-    auto *p9dev = (virtio_9p_dev *)dev->priv_;
+    auto *p9dev = (virtio_9p_dev *)dev->priv();
     status_t ret;
 
     // connect to the 9p server with 9P2000.L
@@ -145,7 +145,7 @@ status_t virtio_9p_start(virtio_device *dev)
 static enum handler_return virtio_9p_irq_driver_callback(
     virtio_device *dev, uint ring, const vring_used_elem *e)
 {
-    auto *p9dev = (virtio_9p_dev *)dev->priv_;
+    auto *p9dev = (virtio_9p_dev *)dev->priv();
     uint16_t id = e->id;
     uint16_t id_next;
     vring_desc *desc = dev->virtio_desc_index_to_desc(ring, id);

@@ -5,6 +5,7 @@
  * license that can be found in the LICENSE file or at
  * https://opensource.org/licenses/MIT
  */
+#include "dev/virtio/virtio-mmio-bus.h"
 #include <dev/virtio.h>
 #include <dev/virtio/virtio_ring.h>
 
@@ -85,6 +86,9 @@ int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride) 
         volatile auto *mmio = (virtio_mmio_config *)((uint8_t *)ptr + i * stride);
         virtio_device *dev = &devices[i];
 
+        auto *bus = new virtio_mmio_bus;
+        dev->bus_ = bus;
+
         dev->index_ = i;
         dev->irq_ = irqs[i];
 
@@ -110,10 +114,10 @@ int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride) 
         if (mmio->device_id == 2) { // block device
             LTRACEF("found block device\n");
 
-            dev->mmio_config_ = mmio;
+            bus->mmio_config_ = mmio;
             dev->config_ptr_ = (void *)mmio->config;
 
-            status_t err = virtio_block_init(dev, dev->virtio_read_host_feature_word(0));
+            status_t err = virtio_block_init(dev, bus->virtio_read_host_feature_word(0));
             if (err >= 0) {
                 // good device
                 dev->valid_ = true;
@@ -127,7 +131,7 @@ int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride) 
         if (mmio->device_id == 1) { // network device
             LTRACEF("found net device\n");
 
-            dev->mmio_config_ = mmio;
+            bus->mmio_config_ = mmio;
             dev->config_ptr_ = (void *)mmio->config;
 
             status_t err = virtio_net_init(dev);
@@ -144,10 +148,10 @@ int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride) 
         if (mmio->device_id == 9) { // 9p device
             LTRACEF("found 9p device\n");
 
-            dev->mmio_config_ = mmio;
+            bus->mmio_config_ = mmio;
             dev->config_ptr_ = (void *)mmio->config;
 
-            status_t err = virtio_9p_init(dev, mmio->host_features);
+            status_t err = virtio_9p_init(dev, bus->virtio_read_host_feature_word((0)));
             if (err >= 0) {
                 // good device
                 dev->valid_ = true;
@@ -163,10 +167,10 @@ int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride) 
         if (mmio->device_id == 0x10) { // virtio-gpu
             LTRACEF("found gpu device\n");
 
-            dev->mmio_config_ = mmio;
+            bus->mmio_config_ = mmio;
             dev->config_ptr_ = (void *)mmio->config;
 
-            status_t err = virtio_gpu_init(dev, dev->virtio_read_host_feature_word(0));
+            status_t err = virtio_gpu_init(dev, bus->virtio_read_host_feature_word( 0));
             if (err >= 0) {
                 // good device
                 dev->valid_ = true;

@@ -22,30 +22,9 @@
 
 #include "virtio_priv.h"
 
+#include <dev/virtio/virtio-mmio-bus.h>
+
 #define LOCAL_TRACE 0
-
-// TODO: switch to using reg.h mmio_ accessors
-void virtio_device::virtio_reset_device() {
-    mmio_config_->status = 0;
-}
-
-void virtio_device::virtio_status_acknowledge_driver() {
-    mmio_config_->status |= VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER;
-}
-
-void virtio_device::virtio_status_driver_ok() {
-    mmio_config_->status |= VIRTIO_STATUS_DRIVER_OK;
-}
-
-void virtio_device::virtio_set_guest_features(uint32_t word, uint32_t features) {
-    mmio_config_->guest_features_sel = word;
-    mmio_config_->guest_features = features;
-}
-
-uint32_t virtio_device::virtio_read_host_feature_word(uint32_t word) {
-    mmio_config_->host_features_sel = word;
-    return mmio_config_->host_features;
-}
 
 void virtio_device::virtio_free_desc(uint ring_index, uint16_t desc_index) {
     LTRACEF("dev %p ring %u index %u free_count %u\n", this, ring_index, desc_index, ring_[ring_index].free_count);
@@ -128,15 +107,6 @@ void virtio_device::virtio_submit_chain(uint ring_index, uint16_t desc_index) {
 #endif
 }
 
-void virtio_device::virtio_kick(uint ring_index) {
-    LTRACEF("dev %p, ring %u\n", this, ring_index);
-
-    DEBUG_ASSERT(ring_index < MAX_VIRTIO_RINGS);
-
-    mmio_config_->queue_notify = ring_index;
-    mb();
-}
-
 status_t virtio_device::virtio_alloc_ring(uint index, uint16_t len) {
     LTRACEF("dev %p, index %u, len %u\n", this, index, len);
 
@@ -192,12 +162,7 @@ status_t virtio_device::virtio_alloc_ring(uint index, uint16_t len) {
     }
 
     /* register the ring with the device */
-    DEBUG_ASSERT(mmio_config_);
-    mmio_config_->guest_page_size = PAGE_SIZE;
-    mmio_config_->queue_sel = index;
-    mmio_config_->queue_num = len;
-    mmio_config_->queue_align = PAGE_SIZE;
-    mmio_config_->queue_pfn = pa / PAGE_SIZE;
+    bus()->register_ring(PAGE_SIZE, index, len, PAGE_SIZE, pa / PAGE_SIZE);
 
     /* mark the ring active */
     active_rings_bitmap_ |= (1 << index);
@@ -205,17 +170,20 @@ status_t virtio_device::virtio_alloc_ring(uint index, uint16_t len) {
     return NO_ERROR;
 }
 
+// TODO: split up and move into virtio-mmio-bus and here
 enum handler_return virtio_device::virtio_mmio_irq(void *arg) {
     virtio_device *dev = (virtio_device *)arg;
     LTRACEF("dev %p, index %u\n", dev, dev->index_);
 
-    uint32_t irq_status = dev->mmio_config_->interrupt_status;
+    virtio_mmio_bus *bus = reinterpret_cast<virtio_mmio_bus *>(dev->bus());
+
+    uint32_t irq_status = bus->mmio_config_->interrupt_status;
     LTRACEF("status 0x%x\n", irq_status);
 
     enum handler_return ret = INT_NO_RESCHEDULE;
     if (irq_status & 0x1) { /* used ring update */
         // XXX is this safe?
-        dev->mmio_config_->interrupt_ack = 0x1;
+        bus->mmio_config_->interrupt_ack = 0x1;
 
         /* cycle through all the active rings */
         for (uint r = 0; r < MAX_VIRTIO_RINGS; r++) {
@@ -243,7 +211,7 @@ enum handler_return virtio_device::virtio_mmio_irq(void *arg) {
         }
     }
     if (irq_status & 0x2) { /* config change */
-        dev->mmio_config_->interrupt_ack = 0x2;
+        bus->mmio_config_->interrupt_ack = 0x2;
 
         if (dev->config_change_callback_) {
             if (dev->config_change_callback_(dev) == INT_RESCHEDULE) {

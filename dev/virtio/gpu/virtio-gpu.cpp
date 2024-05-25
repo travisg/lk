@@ -95,7 +95,7 @@ static status_t send_command_response(struct virtio_gpu_dev *gdev, const void *c
     gdev->dev->virtio_submit_chain(0, i);
 
     /* kick it off */
-    gdev->dev->virtio_kick(0);
+    gdev->dev->bus()->virtio_kick(0);
 
     /* wait for result */
     event_wait(&gdev->io_event);
@@ -342,7 +342,7 @@ status_t virtio_gpu_start(virtio_device *dev) {
 
     LTRACEF("dev %p\n", dev);
 
-    auto *gdev = (virtio_gpu_dev *)dev->priv_;
+    auto *gdev = (virtio_gpu_dev *)dev->priv();
 
     /* get the display info and see if we find a valid pmode */
     err = get_display_info(gdev);
@@ -424,7 +424,7 @@ status_t virtio_gpu_init(virtio_device *dev, uint32_t host_features) {
     event_init(&gdev->flush_event, false, EVENT_FLAG_AUTOUNSIGNAL);
 
     gdev->dev = dev;
-    dev->priv_ = gdev;
+    dev->set_priv(gdev);
 
     gdev->pmode_id = -1;
     gdev->next_resource_id = 1;
@@ -439,13 +439,13 @@ status_t virtio_gpu_init(virtio_device *dev, uint32_t host_features) {
 #endif
 
     /* make sure the device is reset */
-    dev->virtio_reset_device();
+    dev->bus()->virtio_reset_device();
 
-    volatile auto *config = (virtio_gpu_config *)dev->config_ptr_;
+    volatile const auto *config = (const virtio_gpu_config *)dev->get_config_ptr();
     dump_gpu_config(config);
 
     /* ack and set the driver status bit */
-    dev->virtio_status_acknowledge_driver();
+    dev->bus()->virtio_status_acknowledge_driver();
 
     // XXX check features bits and ack/nak them
 
@@ -453,11 +453,10 @@ status_t virtio_gpu_init(virtio_device *dev, uint32_t host_features) {
     dev->virtio_alloc_ring(0, 16);
 
     /* set our irq handler */
-    dev->irq_driver_callback_ = &virtio_gpu_irq_driver_callback;
-    dev->config_change_callback_ = &virtio_gpu_config_change_callback;
+    dev->set_irq_callbacks(&virtio_gpu_irq_driver_callback, &virtio_gpu_config_change_callback);
 
     /* set DRIVER_OK */
-    dev->virtio_status_driver_ok();
+    dev->bus()->virtio_status_driver_ok();
 
     /* save the main device we've found */
     the_gdev = gdev;
@@ -468,7 +467,7 @@ status_t virtio_gpu_init(virtio_device *dev, uint32_t host_features) {
 }
 
 static enum handler_return virtio_gpu_irq_driver_callback(struct virtio_device *dev, uint ring, const struct vring_used_elem *e) {
-    auto *gdev = (virtio_gpu_dev *)dev->priv_;
+    auto *gdev = (virtio_gpu_dev *)dev->priv();
 
     LTRACEF("dev %p, ring %u, e %p, id %u, len %u\n", dev, ring, e, e->id, e->len);
 
@@ -501,11 +500,11 @@ static enum handler_return virtio_gpu_irq_driver_callback(struct virtio_device *
 }
 
 static enum handler_return virtio_gpu_config_change_callback(virtio_device *dev) {
-    auto *gdev = (virtio_gpu_dev *)dev->priv_;
+    auto *gdev = (virtio_gpu_dev *)dev->priv();
 
     LTRACEF("gdev %p\n", gdev);
 
-    volatile auto *config = (virtio_gpu_config *)dev->config_ptr_;
+    volatile const auto *config = (const virtio_gpu_config *)dev->get_config_ptr();
     dump_gpu_config(config);
 
     return INT_RESCHEDULE;

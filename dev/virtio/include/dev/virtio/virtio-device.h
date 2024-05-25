@@ -11,21 +11,17 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <dev/virtio/virtio_ring.h>
+#include <dev/virtio/virtio-bus.h>
 
 struct virtio_mmio_config;
 
+// TODO: move as const inside virio_device
 #define MAX_VIRTIO_RINGS 4
 
 class virtio_device {
 public:
     virtio_device() = default;
     virtual ~virtio_device() = default;
-
-    void virtio_reset_device();
-    void virtio_status_acknowledge_driver();
-    uint32_t virtio_read_host_feature_word(uint32_t word);
-    void virtio_set_guest_features(uint32_t word, uint32_t features);
-    void virtio_status_driver_ok();
 
     /* api used by devices to interact with the virtio bus */
     status_t virtio_alloc_ring(uint index, uint16_t len) __NONNULL();
@@ -47,23 +43,47 @@ public:
     /* submit a chain to the avail list */
     void virtio_submit_chain(uint ring_index, uint16_t desc_index);
 
-    void virtio_kick(uint ring_idnex);
-
     static enum handler_return virtio_mmio_irq(void *arg);
 
-//private:
+    // accessors
+    void *priv() { return priv_; }
+    const void *priv() const { return priv_; }
+
+    void set_priv(void *p) { priv_ = p; }
+
+    virtio_bus *bus() { return bus_; }
+
+    void *get_config_ptr() { return config_ptr_; }
+    const void *get_config_ptr() const { return config_ptr_; }
+
+    using irq_driver_callback = enum handler_return (*)(virtio_device *dev, uint ring, const vring_used_elem *e);
+    using config_change_callback = enum handler_return (*)(virtio_device *dev);
+
+    void set_irq_callbacks(irq_driver_callback irq, config_change_callback config) {
+        irq_driver_callback_ = irq;
+        config_change_callback_ = config;
+    }
+
+private:
+    // XXX move this into constructor
+    friend int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride);
+
+    // mmio or pci
+    virtio_bus *bus_ = {};
+
+    // points into bus's configuration spot
+    // TODO: is this feasible for both PCI and mmio?
+    void *config_ptr_ = {};
+
+    void *priv_ = {}; /* a place for the driver to put private data */
+
     bool valid_ = {};
 
     uint index_ = {};
     uint irq_ = {};
 
-    volatile struct virtio_mmio_config *mmio_config_ = {};
-    void *config_ptr_ = {};
-
-    void *priv_ = {}; /* a place for the driver to put private data */
-
-    enum handler_return (*irq_driver_callback_)(virtio_device *dev, uint ring, const vring_used_elem *e) = {};
-    enum handler_return (*config_change_callback_)(virtio_device *dev) = {};
+    irq_driver_callback irq_driver_callback_ = {};
+    config_change_callback config_change_callback_ = {};
 
     /* virtio rings */
     uint32_t active_rings_bitmap_ = {};

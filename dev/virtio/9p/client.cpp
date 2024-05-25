@@ -173,7 +173,7 @@ static void virtio_9p_req_send(struct virtio_9p_dev *p9dev,
     dev->virtio_submit_chain(VIRTIO_9P_RING_IDX, idx);
 
     /* kick it off */
-    dev->virtio_kick(VIRTIO_9P_RING_IDX);
+    dev->bus()->virtio_kick(VIRTIO_9P_RING_IDX);
 
     spin_unlock_irqrestore(&p9dev->lock, state);
 }
@@ -183,7 +183,7 @@ status_t virtio_9p_rpc(struct virtio_device *dev, const virtio_9p_msg_t *tmsg,
 {
     LTRACEF("dev (%p) tmsg (%p) rmsg (%p)\n", dev, tmsg, rmsg);
 
-    auto *p9dev = (virtio_9p_dev *)dev->priv_;
+    auto *p9dev = (virtio_9p_dev *)dev->priv();
     struct p9_req *req = &p9dev->req;
     status_t ret;
 

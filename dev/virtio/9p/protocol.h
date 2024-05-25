@@ -58,7 +58,7 @@ enum {
 
 struct virtio_9p_dev {
     struct virtio_device *dev;
-    struct virtio_9p_config *config;
+    const struct virtio_9p_config *config;
     bdev_t bdev;
 
     uint32_t msize;
