@@ -64,14 +64,14 @@ struct virtio_blk_config {
         uint8_t unused2[3];
     } zoned;
 };
-STATIC_ASSERT(sizeof(struct virtio_blk_config) == 96);
+STATIC_ASSERT(sizeof(virtio_blk_config) == 96);
 
 struct virtio_blk_req {
     uint32_t type;
     uint32_t ioprio; // v1.3 says this is 'reserved'
     uint64_t sector;
 };
-STATIC_ASSERT(sizeof(struct virtio_blk_req) == 16);
+STATIC_ASSERT(sizeof(virtio_blk_req) == 16);
 
 struct virtio_blk_discard_write_zeroes {
     uint64_t sector;
@@ -81,7 +81,7 @@ struct virtio_blk_discard_write_zeroes {
         uint32_t reserved:31;
     } flags;
 };
-STATIC_ASSERT(sizeof(struct virtio_blk_req) == 16);
+STATIC_ASSERT(sizeof(virtio_blk_req) == 16);
 
 #define VIRTIO_BLK_F_BARRIER  (1<<0) // legacy
 #define VIRTIO_BLK_F_SIZE_MAX (1<<1)
@@ -112,12 +112,12 @@ STATIC_ASSERT(sizeof(struct virtio_blk_req) == 16);
 #define VIRTIO_BLK_S_IOERR      1
 #define VIRTIO_BLK_S_UNSUPP     2
 
-static enum handler_return virtio_block_irq_driver_callback(struct virtio_device *dev, uint ring, const struct vring_used_elem *e);
-static ssize_t virtio_bdev_read_block(struct bdev *bdev, void *buf, bnum_t block, uint count);
-static ssize_t virtio_bdev_write_block(struct bdev *bdev, const void *buf, bnum_t block, uint count);
+static enum handler_return virtio_block_irq_driver_callback(virtio_device *dev, uint ring, const vring_used_elem *e);
+static ssize_t virtio_bdev_read_block(bdev *bdev, void *buf, bnum_t block, uint count);
+static ssize_t virtio_bdev_write_block(bdev *bdev, const void *buf, bnum_t block, uint count);
 
 struct virtio_block_dev {
-    struct virtio_device *dev;
+    virtio_device *dev;
 
     mutex_t lock;
     event_t io_event;
@@ -129,7 +129,7 @@ struct virtio_block_dev {
     uint32_t guest_features;
 
     /* one blk_req structure for io, not crossing a page boundary */
-    struct virtio_blk_req *blk_req;
+    virtio_blk_req *blk_req;
     paddr_t blk_req_phys;
 
     /* one uint8_t response word */
@@ -157,11 +157,11 @@ static void dump_feature_bits(const char *name, uint32_t feature) {
     printf("\n");
 }
 
-status_t virtio_block_init(struct virtio_device *dev, uint32_t host_features) {
+status_t virtio_block_init(virtio_device *dev, uint32_t host_features) {
     LTRACEF("dev %p, host_features %#x\n", dev, host_features);
 
     /* allocate a new block device */
-    struct virtio_block_dev *bdev = (virtio_block_dev *)malloc(sizeof(struct virtio_block_dev));
+    auto *bdev = (virtio_block_dev *)malloc(sizeof(virtio_block_dev));
     if (!bdev)
         return ERR_NO_MEMORY;
 
@@ -169,26 +169,26 @@ status_t virtio_block_init(struct virtio_device *dev, uint32_t host_features) {
     event_init(&bdev->io_event, false, EVENT_FLAG_AUTOUNSIGNAL);
 
     bdev->dev = dev;
-    dev->priv = bdev;
+    dev->priv_ = bdev;
 
-    bdev->blk_req = (virtio_blk_req *)memalign(sizeof(struct virtio_blk_req), sizeof(struct virtio_blk_req));
+    bdev->blk_req = (virtio_blk_req *)memalign(sizeof(virtio_blk_req), sizeof(virtio_blk_req));
 #if WITH_KERNEL_VM
     bdev->blk_req_phys = vaddr_to_paddr(bdev->blk_req);
 #else
-    bdev->blk_req_phys = (uint64_t)(uintptr_t)bdev->blk_req;
+    bdev->blk_req_phys = (paddr_t)(uintptr_t)bdev->blk_req;
 #endif
     LTRACEF("blk_req structure at %p (%#lx phys)\n", bdev->blk_req, bdev->blk_req_phys);
 
 #if WITH_KERNEL_VM
     bdev->blk_response_phys = vaddr_to_paddr(&bdev->blk_response);
 #else
-    bdev->blk_response_phys = (uint64_t)(uintptr_t)&bdev->blk_response;
+    bdev->blk_response_phys = (paddr_t)(uintptr_t)&bdev->blk_response;
 #endif
 
     /* make sure the device is reset */
-    virtio_reset_device(dev);
+    dev->virtio_reset_device();
 
-    volatile struct virtio_blk_config *config = (struct virtio_blk_config *)dev->config_ptr;
+    volatile auto *config = (virtio_blk_config *)dev->config_ptr_;
 
     LTRACEF("capacity %" PRIx64 "\n", config->capacity);
     LTRACEF("size_max %#x\n", config->size_max);
@@ -196,7 +196,7 @@ status_t virtio_block_init(struct virtio_device *dev, uint32_t host_features) {
     LTRACEF("blk_size %#x\n", config->blk_size);
 
     /* ack and set the driver status bit */
-    virtio_status_acknowledge_driver(dev);
+    dev->virtio_status_acknowledge_driver();
 
     /* check features bits and ack/nak them */
     bdev->guest_features = host_features;
@@ -209,18 +209,18 @@ status_t virtio_block_init(struct virtio_device *dev, uint32_t host_features) {
                              VIRTIO_BLK_F_TOPOLOGY |
                              VIRTIO_BLK_F_DISCARD |
                              VIRTIO_BLK_F_WRITE_ZEROES);
-    virtio_set_guest_features(dev, 0, bdev->guest_features);
+    dev->virtio_set_guest_features(0, bdev->guest_features);
 
     /* TODO: handle a RO feature */
 
     /* allocate a virtio ring */
-    virtio_alloc_ring(dev, 0, 256);
+    dev->virtio_alloc_ring(0, 256);
 
     /* set our irq handler */
-    dev->irq_driver_callback = &virtio_block_irq_driver_callback;
+    dev->irq_driver_callback_ = &virtio_block_irq_driver_callback;
 
     /* set DRIVER_OK */
-    virtio_status_driver_ok(dev);
+    dev->virtio_status_driver_ok();
 
     /* construct the block device */
     static uint8_t found_index = 0;
@@ -265,8 +265,8 @@ status_t virtio_block_init(struct virtio_device *dev, uint32_t host_features) {
     return NO_ERROR;
 }
 
-static enum handler_return virtio_block_irq_driver_callback(struct virtio_device *dev, uint ring, const struct vring_used_elem *e) {
-    struct virtio_block_dev *bdev = (struct virtio_block_dev *)dev->priv;
+static enum handler_return virtio_block_irq_driver_callback(virtio_device *dev, uint ring, const struct vring_used_elem *e) {
+    auto *bdev = (virtio_block_dev *)dev->priv_;
 
     LTRACEF("dev %p, ring %u, e %p, id %u, len %u\n", dev, ring, e, e->id, e->len);
 
@@ -274,7 +274,7 @@ static enum handler_return virtio_block_irq_driver_callback(struct virtio_device
     uint16_t i = e->id;
     for (;;) {
         int next;
-        struct vring_desc *desc = virtio_desc_index_to_desc(dev, ring, i);
+        vring_desc *desc = dev->virtio_desc_index_to_desc(ring, i);
 
         //virtio_dump_desc(desc);
 
@@ -285,7 +285,7 @@ static enum handler_return virtio_block_irq_driver_callback(struct virtio_device
             next = -1;
         }
 
-        virtio_free_desc(dev, ring, i);
+        dev->virtio_free_desc(ring, i);
 
         if (next < 0)
             break;
@@ -298,13 +298,13 @@ static enum handler_return virtio_block_irq_driver_callback(struct virtio_device
     return INT_RESCHEDULE;
 }
 
-ssize_t virtio_block_read_write(struct virtio_device *dev, void *buf, const off_t offset, const size_t len, const bool write) {
-    struct virtio_block_dev *bdev = (struct virtio_block_dev *)dev->priv;
+static ssize_t virtio_block_read_write(virtio_device *dev, void *buf, const off_t offset, const size_t len, const bool write) {
+    auto *bdev = (virtio_block_dev *)dev->priv_;
 
     uint16_t i;
-    struct vring_desc *desc;
+    vring_desc *desc;
 
-    LTRACEF("dev %p, buf %p, offset 0x%llx, len %zu\n", dev, buf, offset, len);
+    LTRACEF("this %p, buf %p, offset 0x%llx, len %zu\n", dev, buf, offset, len);
 
     mutex_acquire(&bdev->lock);
 
@@ -316,7 +316,7 @@ ssize_t virtio_block_read_write(struct virtio_device *dev, void *buf, const off_
             bdev->blk_req->type, bdev->blk_req->ioprio, bdev->blk_req->sector);
 
     /* put together a transfer */
-    desc = virtio_alloc_desc_chain(dev, 0, 3, &i);
+    desc = dev->virtio_alloc_desc_chain(0, 3, &i);
     LTRACEF("after alloc chain desc %p, i %u\n", desc, i);
 
     // XXX not cache safe.
@@ -324,11 +324,11 @@ ssize_t virtio_block_read_write(struct virtio_device *dev, void *buf, const off_
 
     /* set up the descriptor pointing to the head */
     desc->addr = bdev->blk_req_phys;
-    desc->len = sizeof(struct virtio_blk_req);
+    desc->len = sizeof(virtio_blk_req);
     desc->flags |= VRING_DESC_F_NEXT;
 
     /* set up the descriptor pointing to the buffer */
-    desc = virtio_desc_index_to_desc(dev, 0, desc->next);
+    desc = dev->virtio_desc_index_to_desc(0, desc->next);
 #if WITH_KERNEL_VM
     /* translate the first buffer */
     vaddr_t va = (vaddr_t)buf;
@@ -367,8 +367,8 @@ ssize_t virtio_block_read_write(struct virtio_device *dev, void *buf, const off_
             desc->len += len_tohandle;
         } else {
             /* new physical page needed, allocate a new descriptor and start again */
-            uint16_t next_i = virtio_alloc_desc(dev, 0);
-            struct vring_desc *next_desc = virtio_desc_index_to_desc(dev, 0, next_i);
+            uint16_t next_i = dev->virtio_alloc_desc(0);
+            vring_desc *next_desc = dev->virtio_desc_index_to_desc(0, next_i);
             DEBUG_ASSERT(next_desc);
 
             LTRACEF("doesn't extend, need new desc, allocated desc %i (%p)\n", next_i, next_desc);
@@ -389,16 +389,16 @@ ssize_t virtio_block_read_write(struct virtio_device *dev, void *buf, const off_
 #endif
 
     /* set up the descriptor pointing to the response */
-    desc = virtio_desc_index_to_desc(dev, 0, desc->next);
+    desc = dev->virtio_desc_index_to_desc(0, desc->next);
     desc->addr = bdev->blk_response_phys;
     desc->len = 1;
     desc->flags = VRING_DESC_F_WRITE;
 
     /* submit the transfer */
-    virtio_submit_chain(dev, 0, i);
+    dev->virtio_submit_chain(0, i);
 
     /* kick it off */
-    virtio_kick(dev, 0);
+    dev->virtio_kick(0);
 
     /* wait for the transfer to complete */
     event_wait(&bdev->io_event);
@@ -412,8 +412,8 @@ ssize_t virtio_block_read_write(struct virtio_device *dev, void *buf, const off_
     return len;
 }
 
-static ssize_t virtio_bdev_read_block(struct bdev *bdev, void *buf, bnum_t block, uint count) {
-    struct virtio_block_dev *dev = containerof(bdev, struct virtio_block_dev, bdev);
+static ssize_t virtio_bdev_read_block(bdev *bdev, void *buf, bnum_t block, uint count) {
+    virtio_block_dev *dev = containerof(bdev, struct virtio_block_dev, bdev);
 
     LTRACEF("dev %p, buf %p, block 0x%x, count %u\n", bdev, buf, block, count);
 
@@ -422,8 +422,8 @@ static ssize_t virtio_bdev_read_block(struct bdev *bdev, void *buf, bnum_t block
     return result;
 }
 
-static ssize_t virtio_bdev_write_block(struct bdev *bdev, const void *buf, bnum_t block, uint count) {
-    struct virtio_block_dev *dev = containerof(bdev, struct virtio_block_dev, bdev);
+static ssize_t virtio_bdev_write_block(bdev *bdev, const void *buf, bnum_t block, uint count) {
+    virtio_block_dev *dev = containerof(bdev, struct virtio_block_dev, bdev);
 
     LTRACEF("dev %p, buf %p, block 0x%x, count %u\n", bdev, buf, block, count);
 

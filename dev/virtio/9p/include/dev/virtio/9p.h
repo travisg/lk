@@ -451,6 +451,8 @@ typedef struct _virtio_9p_msg_t {
 
 __BEGIN_CDECLS
 
+struct virtio_device;
+
 status_t virtio_9p_init(struct virtio_device *dev, uint32_t host_features) __NONNULL();
 status_t virtio_9p_start(struct virtio_device *dev) __NONNULL();
 struct virtio_device *virtio_9p_bdev_to_virtio_device(bdev_t *bdev);

@@ -21,6 +21,7 @@
 #include <kernel/spinlock.h>
 #include <lib/pktbuf.h>
 #include <lib/minip.h>
+#include <dev/virtio/virtio-device.h>
 
 #define LOCAL_TRACE 0
 
@@ -172,40 +173,40 @@ static void dump_feature_bits(uint64_t feature) {
     printf("\n");
 }
 
-status_t virtio_net_init(struct virtio_device *dev) {
+status_t virtio_net_init(virtio_device *dev) {
     LTRACEF("dev %p\n", dev);
 
     /* allocate a new net device */
-    struct virtio_net_dev *ndev = (virtio_net_dev *)calloc(1, sizeof(struct virtio_net_dev));
+    auto *ndev = (virtio_net_dev *)calloc(1, sizeof(virtio_net_dev));
     if (!ndev)
         return ERR_NO_MEMORY;
 
     ndev->dev = dev;
-    dev->priv = ndev;
+    dev->priv_ = ndev;
     ndev->started = false;
 
     ndev->lock = SPIN_LOCK_INITIAL_VALUE;
     event_init(&ndev->rx_event, false, EVENT_FLAG_AUTOUNSIGNAL);
     list_initialize(&ndev->completed_rx_queue);
 
-    ndev->config = (struct virtio_net_config *)dev->config_ptr;
+    ndev->config = (virtio_net_config *)dev->config_ptr_;
 
     /* ack and set the driver status bit */
-    virtio_status_acknowledge_driver(dev);
+    dev->virtio_status_acknowledge_driver();
 
     // XXX check features bits and ack/nak them
-    uint64_t host_features = virtio_read_host_feature_word(dev, 0) | (uint64_t)virtio_read_host_feature_word(dev, 1) << 32;
+    uint64_t host_features = dev->virtio_read_host_feature_word(0) | (uint64_t)dev->virtio_read_host_feature_word(1) << 32;
     dump_feature_bits(host_features);
 
     /* set our irq handler */
-    dev->irq_driver_callback = &virtio_net_irq_driver_callback;
+    dev->irq_driver_callback_ = &virtio_net_irq_driver_callback;
 
     /* set DRIVER_OK */
-    virtio_status_driver_ok(dev);
+    dev->virtio_status_driver_ok();
 
     /* allocate a pair of virtio rings */
-    virtio_alloc_ring(dev, RING_RX, RX_RING_SIZE); // rx
-    virtio_alloc_ring(dev, RING_TX, TX_RING_SIZE); // tx
+    dev->virtio_alloc_ring(RING_RX, RX_RING_SIZE); // rx
+    dev->virtio_alloc_ring(RING_TX, TX_RING_SIZE); // tx
 
     the_ndev = ndev;
 
@@ -256,7 +257,7 @@ static status_t virtio_net_queue_tx_pktbuf(struct virtio_net_dev *ndev, pktbuf_t
     /* only queue if we have enough tx descriptors */
     if (ndev->tx_pending_count + 2 <= TX_RING_SIZE) {
         /* allocate a chain of descriptors for our transfer */
-        desc = virtio_alloc_desc_chain(vdev, RING_TX, 2, &i);
+        desc = vdev->virtio_alloc_desc_chain(RING_TX, 2, &i);
     }
     if (!desc) {
         spin_unlock_irqrestore(&ndev->lock, state);
@@ -282,16 +283,16 @@ static status_t virtio_net_queue_tx_pktbuf(struct virtio_net_dev *ndev, pktbuf_t
     desc->flags |= VRING_DESC_F_NEXT;
 
     /* set up the descriptor pointing to the buffer */
-    desc = virtio_desc_index_to_desc(vdev, RING_TX, desc->next);
+    desc = vdev->virtio_desc_index_to_desc(RING_TX, desc->next);
     desc->addr = pktbuf_data_phys(p2);
     desc->len = p2->dlen;
     desc->flags = 0;
 
     /* submit the transfer */
-    virtio_submit_chain(vdev, RING_TX, i);
+    vdev->virtio_submit_chain(RING_TX, i);
 
     /* kick it off */
-    virtio_kick(vdev, RING_TX);
+    vdev->virtio_kick(RING_TX);
 
     spin_unlock_irqrestore(&ndev->lock, state);
 
@@ -339,7 +340,7 @@ static status_t virtio_net_queue_rx(struct virtio_net_dev *ndev, pktbuf_t *p) {
 
     /* allocate a chain of descriptors for our transfer */
     uint16_t i;
-    struct vring_desc *desc = virtio_alloc_desc_chain(vdev, RING_RX, 1, &i);
+    struct vring_desc *desc = vdev->virtio_alloc_desc_chain(RING_RX, 1, &i);
     DEBUG_ASSERT(desc); /* shouldn't be possible not to have a descriptor ready */
 
     /* save a pointer to our pktbufs for the irq handler to use */
@@ -352,10 +353,10 @@ static status_t virtio_net_queue_rx(struct virtio_net_dev *ndev, pktbuf_t *p) {
     desc->flags = VRING_DESC_F_WRITE;
 
     /* submit the transfer */
-    virtio_submit_chain(vdev, RING_RX, i);
+    vdev->virtio_submit_chain(RING_RX, i);
 
     /* kick it off */
-    virtio_kick(vdev, RING_RX);
+    vdev->virtio_kick(RING_RX);
 
     spin_unlock_irqrestore(&ndev->lock, state);
 
@@ -363,7 +364,7 @@ static status_t virtio_net_queue_rx(struct virtio_net_dev *ndev, pktbuf_t *p) {
 }
 
 static enum handler_return virtio_net_irq_driver_callback(struct virtio_device *dev, uint ring, const struct vring_used_elem *e) {
-    struct virtio_net_dev *ndev = (struct virtio_net_dev *)dev->priv;
+    struct virtio_net_dev *ndev = (struct virtio_net_dev *)dev->priv_;
 
     LTRACEF("dev %p, ring %u, e %p, id %u, len %u\n", dev, ring, e, e->id, e->len);
 
@@ -373,7 +374,7 @@ static enum handler_return virtio_net_irq_driver_callback(struct virtio_device *
     uint16_t i = e->id;
     for (;;) {
         int next;
-        struct vring_desc *desc = virtio_desc_index_to_desc(dev, ring, i);
+        struct vring_desc *desc = dev->virtio_desc_index_to_desc(ring, i);
 
         if (desc->flags & VRING_DESC_F_NEXT) {
             next = desc->next;
@@ -382,7 +383,7 @@ static enum handler_return virtio_net_irq_driver_callback(struct virtio_device *
             next = -1;
         }
 
-        virtio_free_desc(dev, ring, i);
+        dev->virtio_free_desc(ring, i);
 
         if (ring == RING_RX) {
             /* put the freed rx buffer in a queue */
