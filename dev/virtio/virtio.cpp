@@ -11,12 +11,12 @@
 #include <lk/debug.h>
 #include <lk/init.h>
 
-void virtio_dump_desc(const vring_desc *desc) {
-    printf("vring descriptor %p\n", desc);
-    printf("\taddr  0x%llx\n", desc->addr);
-    printf("\tlen   0x%x\n", desc->len);
-    printf("\tflags 0x%hx\n", desc->flags);
-    printf("\tnext  0x%hx\n", desc->next);
+void virtio_dump_desc(const vring_desc &desc) {
+    printf("vring descriptor %p\n", &desc);
+    printf("\taddr  0x%llx\n", desc.addr);
+    printf("\tlen   0x%x\n", desc.len);
+    printf("\tflags 0x%hx\n", desc.flags);
+    printf("\tnext  0x%hx\n", desc.next);
 }
 
 static void virtio_init(uint level) {

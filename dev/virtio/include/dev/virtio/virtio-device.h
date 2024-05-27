@@ -94,7 +94,7 @@ private:
     /* virtio rings */
     uint32_t active_rings_bitmap_ = {};
     uint16_t ring_len_[MAX_VIRTIO_RINGS] = {};
-    vring ring_[MAX_VIRTIO_RINGS];
+    vring ring_[MAX_VIRTIO_RINGS] = {};
 };
 
 
