@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"editor.tabSize": 4,
+		"files.exclude": {
+			"**/.cache": true,
+			"**/.clangd": true
+		}
+	}
+}
