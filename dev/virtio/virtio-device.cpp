@@ -25,7 +25,7 @@
 
 #include "virtio_priv.h"
 
-#define LOCAL_TRACE 0
+#define LOCAL_TRACE 1
 
 void virtio_device::virtio_free_desc(uint ring_index, uint16_t desc_index) {
     LTRACEF("dev %p ring %u index %u free_count %u\n", this, ring_index, desc_index, ring_[ring_index].free_count);

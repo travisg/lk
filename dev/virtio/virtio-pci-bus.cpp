@@ -26,8 +26,11 @@
 #if WITH_DEV_VIRTIO_BLOCK
 #include <dev/virtio/block.h>
 #endif
+#if WITH_DEV_VIRTIO_NET
+#include <dev/virtio/net.h>
+#endif
 
-#define LOCAL_TRACE 0
+#define LOCAL_TRACE 1
 
 #include <dev/bus/pci.h>
 
@@ -37,19 +40,6 @@ struct virtio_pci_devices {
     uint16_t device_id;
     bool legacy;
     status_t (*init)(pci_location_t loc, const virtio_pci_devices &dev_table_entry, size_t index);
-};
-
-static status_t init_block(pci_location_t loc, const virtio_pci_devices &dev_table_entry, size_t index);
-
-const virtio_pci_devices devices[] = {
-    { 0x1000, true, nullptr }, // transitional network
-    { 0x1001, true, &init_block }, // transitional block
-    { 0x1009, true, nullptr }, // legacy virtio 9p
-    { 0x1041, false, nullptr }, // non-transitional network
-    { 0x1042, false, &init_block }, // non-transitional block
-    { 0x1043, false, nullptr }, // non-transitional console
-    { 0x1050, false, nullptr }, // non-transitional gpu
-    { 0x1052, false, nullptr }, // non-transitional input
 };
 
 struct virtio_pci_cap {
@@ -190,12 +180,13 @@ void virtio_pci_bus::register_ring(uint32_t page_size, uint32_t queue_sel, uint3
     ccfg->queue_select = queue_sel;
 
     LTRACEF("existing queue_size %u\n", ccfg->queue_size);
-    LTRACEF("existin notify off %u\n", ccfg->queue_notify_off);
+    LTRACEF("existing notify off %u\n", ccfg->queue_notify_off);
 
     ccfg->queue_size = queue_num;
     ccfg->queue_desc = ring_descriptor_paddr;
     ccfg->queue_driver = ring_available_paddr;
     ccfg->queue_device = ring_used_paddr;
+    ccfg->queue_msix_vector = 0;
     ccfg->queue_enable = 1;
 }
 
@@ -208,7 +199,7 @@ handler_return virtio_pci_bus::virtio_pci_irq(void *arg) {
     LTRACEF("isr status register %p\n", isr_status);
 
     // reading status implicitly acks it and resets to 0
-    uint32_t irq_status = *isr_status;
+    uint8_t irq_status = *isr_status;
     LTRACEF("status %#x\n", irq_status);
 
     enum handler_return ret = INT_NO_RESCHEDULE;
@@ -217,7 +208,6 @@ handler_return virtio_pci_bus::virtio_pci_irq(void *arg) {
         if (_ret == INT_RESCHEDULE) {
             ret = _ret;
         }
-
     }
     if (irq_status & 0x2) { /* config change */
         auto _ret = bus->dev_->handle_config_interrupt();
@@ -345,7 +335,8 @@ common:
     }
 
     uint irq_base;
-    err = pci_bus_mgr_allocate_msi(loc_, 1, &irq_base);
+    // TODO: fall back to msi
+    err = pci_bus_mgr_allocate_msix(loc_, 1, &irq_base);
     if (err != NO_ERROR) {
         // fall back to regular IRQs
         err = pci_bus_mgr_allocate_irq(loc_, &irq_base);
@@ -393,9 +384,50 @@ static status_t init_block(pci_location_t loc, const virtio_pci_devices &dev_tab
 #endif
 }
 
-static void virtio_pci_init(uint level) {
+static status_t init_net(pci_location_t loc, const virtio_pci_devices &dev_table_entry, size_t index) {
     LTRACE_ENTRY;
 
+#if WITH_DEV_VIRTIO_NET
+    // create a virtio_pci_bus object and initialize it based on the location
+    auto *bus = new virtio_pci_bus();
+    auto *dev = new virtio_device(bus);
+
+    auto err = bus->init(dev, loc, index);
+    if (err != NO_ERROR) {
+        delete bus;
+        return err;
+    }
+
+    // TODO: move the config pointer getter that devices use into the bus
+    dev->set_config_ptr(bus->device_config());
+
+    err = virtio_net_init(dev);
+    if (err != NO_ERROR) {
+        PANIC_UNIMPLEMENTED;
+    }
+
+    return err;
+#else
+    return ERR_NOT_FOUND;
+#endif
+}
+
+
+int virtio_pci_init() {
+    LTRACE_ENTRY;
+
+    constexpr virtio_pci_devices devices[] = {
+        { 0x1000, true, &init_net }, // transitional network
+        { 0x1001, true, &init_block }, // transitional block
+        { 0x1009, true, nullptr }, // legacy virtio 9p
+        { 0x1041, false, &init_net }, // non-transitional network
+        { 0x1042, false, &init_block }, // non-transitional block
+        { 0x1043, false, nullptr }, // non-transitional console
+        { 0x1050, false, nullptr }, // non-transitional gpu
+        { 0x1052, false, nullptr }, // non-transitional input
+    };
+
+    int count = 0;
     for (auto &dev: devices) {
         for (size_t i = 0; ; i++) {
             pci_location_t loc;
@@ -409,15 +441,18 @@ static void virtio_pci_init(uint level) {
 
             // call the init routine
             if (dev.init) {
-                dev.init(loc, dev, i);
+                err = dev.init(loc, dev, i);
+                if (err != NO_ERROR) {
+                    count++;
+                }
             }
         }
     }
 
     LTRACE_EXIT;
-}
 
-LK_INIT_HOOK(virtio_pci, &virtio_pci_init, LK_INIT_LEVEL_PLATFORM + 1);
+    return count;
+}
 
 #endif
 

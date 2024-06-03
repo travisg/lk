@@ -309,6 +309,24 @@ status_t pci_bus_mgr_allocate_msi(const pci_location_t loc, size_t num_requested
     return d->allocate_msi(num_requested, irqbase);
 }
 
+status_t pci_bus_mgr_allocate_msix(const pci_location_t loc, size_t num_requested, uint *irqbase) {
+    char str[14];
+    LTRACEF("%s num_request %zu\n", pci_loc_string(loc, str), num_requested);
+
+    *irqbase = 0;
+
+    device *d = lookup_device_by_loc(loc);
+    if (!d) {
+        return ERR_NOT_FOUND;
+    }
+
+    if (!d->has_msix()) {
+        return ERR_NO_RESOURCES;
+    }
+
+    return d->allocate_msix(num_requested, irqbase);
+}
+
 status_t pci_bus_mgr_allocate_irq(const pci_location_t loc, uint *irqbase) {
     char str[14];
     LTRACEF("%s\n", pci_loc_string(loc, str));

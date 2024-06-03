@@ -7,6 +7,7 @@
  */
 
 #include "device.h"
+#include "arch/mmu.h"
 
 #include <sys/types.h>
 #include <lk/cpp.h>
@@ -21,6 +22,10 @@
 #include <string.h>
 #include <assert.h>
 #include <platform/interrupts.h>
+
+#if WITH_KERNEL_VM
+#include <kernel/vm.h>
+#endif
 
 #define LOCAL_TRACE 0
 
@@ -347,6 +352,153 @@ status_t device::allocate_msi(size_t num_requested, uint *msi_base) {
 
     // set up the control register and enable it
     control = 1; // NME/NMI = 1, no per vector masking, keep 64bit flag, enable
+    pci_write_config_half(loc(), cap_offset + 2, control);
+
+    // write it back to the pci config in the interrupt line offset
+    pci_write_config_byte(loc(), PCI_CONFIG_INTERRUPT_LINE, vector_base);
+
+    // pass back the allocated irq to the caller
+    *msi_base = vector_base;
+
+    return NO_ERROR;
+}
+
+status_t device::allocate_msix(size_t num_requested, uint *msi_base) {
+    LTRACE_ENTRY;
+
+    // for the moment, only deal with 1
+    DEBUG_ASSERT(num_requested == 1);
+
+    if (!has_msix()) {
+        return ERR_NOT_SUPPORTED;
+    }
+
+    DEBUG_ASSERT(msix_cap_ && msix_cap_->is_msix());
+
+    // program it into the capability
+    const uint16_t cap_offset = msix_cap_->config_offset;
+
+    // read the table size and address out of the capability
+    uint16_t control;
+    status_t err = pci_read_config_half(loc(), cap_offset + 2, &control);
+    if (err != NO_ERROR) {
+        return err;
+    }
+    const uint32_t table_count = (control & 0x3f) + 1;
+    TRACEF("control word %#x table count %u\n", control, table_count);
+    uint32_t table_offset, pba_offset;
+    err = pci_read_config_word(loc(), cap_offset + 4, &table_offset);
+    if (err != NO_ERROR) {
+        return err;
+    }
+    err = pci_read_config_word(loc(), cap_offset + 8, &pba_offset);
+    if (err != NO_ERROR) {
+        return err;
+    }
+
+    // does the device support enough vectors?
+    if (num_requested > table_count) {
+        return ERR_NO_RESOURCES;
+    }
+
+    // ask the platform for interrupts
+    uint vector_base;
+    err = platform_allocate_interrupts(num_requested, 0, true, &vector_base);
+    if (err != NO_ERROR) {
+        return err;
+    }
+
+    // Compute what BARs we need to map and where
+    struct mapping {
+        explicit mapping(uint32_t offset_bar_word) {
+            bar = offset_bar_word & 0x3;
+            offset = offset_bar_word & ~0x3;
+            length = static_cast<size_t>(offset_bar_word) * 16;
+        }
+
+        uint8_t bar;
+        size_t offset;
+        size_t length;
+    };
+
+    mapping table_map(table_offset);
+    mapping pba_map(pba_offset);
+    TRACEF("table offset %#zx, bar %u\n", table_map.offset, table_map.bar);
+    TRACEF("pba offset %#zx, bar %u\n", pba_map.offset, pba_map.bar);
+
+    auto map_it = [this, &err](mapping &map, void **ptr, bool readonly)  -> status_t {
+#if WITH_KERNEL_VM
+        const auto &bar = bars_[map.bar];
+        if (!bar.valid || bar.io) {
+            printf("msi-x bar is not valid\n");
+            return ERR_INVALID_ARGS;
+        }
+
+        paddr_t base = ROUNDDOWN(map.offset, PAGE_SIZE);
+        size_t length = ROUNDUP(map.length + map.offset - base, PAGE_SIZE);
+        base += bar.addr;
+
+        err = vmm_alloc_physical(vmm_get_kernel_aspace(), "pci msix var", length, ptr, 0,
+                                 base, /* vmm_flags */ 0,
+                                 ARCH_MMU_FLAG_UNCACHED_DEVICE | (readonly ? ARCH_MMU_FLAG_PERM_RO : 0));
+        if (err != NO_ERROR) {
+            printf("error mapping msi-x bar\n");
+            return err;
+        }
+        TRACEF("msi-x bar mapped at %p\n", *ptr);
+#else
+        // no need to map, it's already available at the physical address
+        if (sizeof(void *) < 8 && (bars[i].addr + bars[i].size) > UINT32_MAX) {
+            TRACEF("aborting due to 64bit BAR on 32bit arch\n");
+            return ERR_NO_MEMORY;
+        }
+        bar_map.vaddr = (uint8_t *)(uintptr_t)bars[i].addr;
+#endif
+        return NO_ERROR;
+    };
+
+    err = map_it(table_map, &msix_table_map, false);
+    if (err != NO_ERROR) {
+        return err;
+    }
+    err = map_it(pba_map, &msix_pba_map, true);
+    if (err != NO_ERROR) {
+        return err;
+    }
+
+    // compute the table pointers
+    msix_table_ptr = (volatile uint32_t *)((uintptr_t)msix_table_map + (table_map.offset - ROUNDDOWN(table_map.offset, PAGE_SIZE)));
+    msix_pba_ptr = (volatile uint32_t *)((uintptr_t)msix_pba_map + (pba_map.offset - ROUNDDOWN(pba_map.offset, PAGE_SIZE)));
+
+    TRACEF("msix table %p, pba table %p\n", msix_table_ptr, msix_pba_ptr);
+
+    // compute the MSI message to construct
+    uint64_t msi_address = 0;
+    uint16_t msi_data = 0;
+    err = platform_compute_msi_values(vector_base, 0, true, &msi_address, &msi_data);
+    if (err != NO_ERROR) {
+        // TODO: return the allocated msi
+        return err;
+    }
+
+    // Mask all of the vectors
+    for (size_t i = 0; i < table_count; i++) {
+        msix_table_ptr[i * 4] = 0;
+        msix_table_ptr[i * 4 + 1] = 0;
+        msix_table_ptr[i * 4 + 2] = 0;
+        msix_table_ptr[i * 4 + 3] = 1; // masked
+    }
+
+    // write the requested vectors
+    for (size_t i = 0; i < num_requested; i++) {
+        msix_table_ptr[i * 4] = msi_address;
+        msix_table_ptr[i * 4 + 1] = msi_address >> 32;
+        msix_table_ptr[i * 4 + 2] = msi_data;
+        msix_table_ptr[i * 4 + 3] = 0; // not masked
+    }
+
+    // set up the control register and enable it
+    control |= (1<<15); // MSI-X enable, no functions masked
     pci_write_config_half(loc(), cap_offset + 2, control);
 
     // write it back to the pci config in the interrupt line offset

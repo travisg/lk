@@ -93,8 +93,10 @@ void platform_init(void) {
 
         // assign resources to all devices in case they need it
         pci_bus_mgr_assign_resources();
-    }
 
+        // scan for an initialize any virtio devices
+        virtio_pci_init();
+    }
 
     /* detect any virtio devices */
     uint virtio_irqs[NUM_VIRTIO_TRANSPORTS];

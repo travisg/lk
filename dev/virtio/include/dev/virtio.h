@@ -13,9 +13,13 @@
 
 __BEGIN_CDECLS
 
-/* detect a virtio mmio hardware block
- * returns number of devices found */
+// Detect a virtio mmio hardware block.
+// Returns number of devices found.
 int virtio_mmio_detect(void *ptr, uint count, const uint irqs[], size_t stride);
+
+// Scan pci bus for virtio devices. Only implemented if PCI is present.
+// Returns number of devices found.
+int virtio_pci_init(void);
 
 __END_CDECLS
 
