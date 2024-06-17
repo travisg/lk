@@ -38,6 +38,8 @@
 #define RISCV_CSR_TIMEH     (0xc81)
 #define RISCV_CSR_INSRETH   (0xc82)
 
+// CSRs that exist in both machine and supervisor mode. Synthesize the appropriate
+// one based on prefixing the name with either m or s.
 #define RISCV_CSR_XSTATUS   __CONCAT(RISCV_MODE_PREFIX, status)
 #define RISCV_CSR_XIE       __CONCAT(RISCV_MODE_PREFIX, ie)
 #define RISCV_CSR_XTVEC     __CONCAT(RISCV_MODE_PREFIX, tvec)
@@ -59,8 +61,8 @@
 #if RISCV_S_MODE // Supervisor-mode only CSRs
 #define RISCV_CSR_SATP      satp
 // sstc feature
-#define RISCV_CSR_STIMECMP  stimecmp
-#define RISCV_CSR_STIMECMPH stimecmph
+#define RISCV_CSR_STIMECMP  (0x14d)
+#define RISCV_CSR_STIMECMPH (0x15d)
 #endif
 
 #define RISCV_CSR_XSTATUS_IE    (1ul << (RISCV_XMODE_OFFSET + 0))
