@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <arch/ops.h>
 #include <arch/m68k.h>
+#include <arch/m68k/mmu.h>
 #include <kernel/spinlock.h>
 
 #define LOCAL_TRACE 0
@@ -24,10 +25,16 @@ void arch_early_init(void) {
     extern uint32_t exc_vectors[256];
     asm volatile("movec %0, %%vbr" :: "r"(exc_vectors));
 #endif
+#if M68K_MMU
+    m68k_mmu_early_init();
+#endif
 }
 
 void arch_init(void) {
     LTRACE;
+#if M68K_MMU
+    m68k_mmu_init();
+#endif
 }
 
 void arch_idle(void) {

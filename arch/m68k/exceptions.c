@@ -9,6 +9,7 @@
 #include <inttypes.h>
 #include <lk/debug.h>
 #include <lk/trace.h>
+#include <assert.h>
 #include <kernel/thread.h>
 #include <target.h>
 
@@ -24,6 +25,27 @@ typedef struct m68k_iframe {
     uint16_t vector_offset : 12;
 } m68k_iframe_t;
 
+typedef struct m68k_iframe_format_7 {
+    m68k_iframe_t base;
+    uint32_t effective_address;
+    uint16_t ssw;
+    uint16_t wb3_status;
+    uint16_t wb2_status;
+    uint16_t wb1_status;
+    uint32_t fault_address;
+    uint32_t wb3_address;
+    uint32_t wb3_data;
+    uint32_t wb2_address;
+    uint32_t wb2_data;
+    uint32_t wb1_address;
+    uint32_t wb1_data;
+    uint32_t push_data_1;
+    uint32_t push_data_2;
+    uint32_t push_data_3;
+} m68k_iframe_format_7_t;
+
+static_assert(sizeof(m68k_iframe_format_7_t) - sizeof(m68k_iframe_t) == (0x3c - 0x8), "");
+
 void dump_iframe(const m68k_iframe_t *iframe) {
     printf("pc 0x%08x sr 0x%04x format %#x vector %#x\n", iframe->pc_low | iframe->pc_high << 16, iframe->sr,
             iframe->format, iframe->vector_offset / 4);
@@ -33,10 +55,28 @@ void dump_iframe(const m68k_iframe_t *iframe) {
     printf("a4 0x%08x a5 0x%08x a6 0x%08x\n", iframe->a[4], iframe->a[5], iframe->a[6]);
 }
 
+static void access_fault(m68k_iframe_t *frame) {
+    printf("access fault\n");
+    dump_iframe(frame);
+
+    // dump additional frame 7 stuff
+    m68k_iframe_format_7_t *f7 = (m68k_iframe_format_7_t *)frame;
+    printf("effective address %#" PRIx32 "\n", f7->effective_address);
+    printf("special status word %#" PRIx16 "\n", f7->ssw);
+    printf("halting\n");
+    for (;;);
+}
+
 void m68k_exception(m68k_iframe_t *frame) {
     uint8_t code = frame->vector_offset / 4;
 
-    LTRACEF("frame %p, code %#hhx\n", frame, code);
+    TRACEF("frame %p, code %#hhx\n", frame, code);
+
+    switch (code ) {
+        case 2:
+            access_fault(frame);
+            break;
+    }
 
     dump_iframe(frame);
 

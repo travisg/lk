@@ -4,6 +4,7 @@ MODULE := $(LOCAL_DIR)
 
 ARCH := m68k
 M68K_CPU := 68040
+WITH_MMU ?= 1
 LK_HEAP_IMPLEMENTATION ?= dlmalloc
 
 MODULE_DEPS += lib/cbuf
