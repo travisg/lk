@@ -111,7 +111,7 @@ add sp, sp, #32
     regsave_short
     msr daifclr, #1 /* reenable fiqs once elr and spsr have been saved */
     mov x0, sp
-    bl  platform_irq
+    bl  arch_irq
     cbz x0, .Lirq_exception_no_preempt\@
     bl  thread_preempt
 .Lirq_exception_no_preempt\@:

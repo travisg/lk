@@ -26,6 +26,25 @@
 static spin_lock_t arm_boot_cpu_lock = 1;
 static volatile int secondaries_to_init = 0;
 #endif
+static uint32_t cpu_in_irq_ctxt[SMP_MAX_CPUS];
+
+enum handler_return arch_irq(struct arm64_iframe_short *frame) {
+    enum handler_return ret;
+    uint32_t cpu = arch_curr_cpu_num();
+    DEBUG_ASSERT(cpu < SMP_MAX_CPUS);
+
+    cpu_in_irq_ctxt[cpu] = 1;
+    ret = platform_irq(frame);
+    cpu_in_irq_ctxt[cpu] = 0;
+    return ret;
+}
+
+bool arch_in_int_handler() {
+    uint32_t cpu = arch_curr_cpu_num();
+    DEBUG_ASSERT(cpu < SMP_MAX_CPUS);
+
+    return (cpu_in_irq_ctxt[cpu] == 1);
+}
 
 static void arm64_cpu_early_init(void) {
     /* set the vector base */

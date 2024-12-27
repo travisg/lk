@@ -204,18 +204,8 @@ FUNCTION(arm_irq)
 
     /* r0 now holds pointer to iframe */
 
-    /* track that we're inside an irq handler */
-    LOADCONST(r2, __arm_in_handler)
-    mov     r1, #1
-    str     r1, [r2]
-
     /* call into higher level code */
-    bl  platform_irq
-
-    /* clear the irq handler status */
-    LOADCONST(r1, __arm_in_handler)
-    mov     r2, #0
-    str     r2, [r1]
+    bl arch_irq
 
     /* reschedule if the handler returns nonzero */
     cmp     r0, #0
@@ -237,7 +227,3 @@ FUNCTION(arm_fiq)
 DATA(__irq_cycle_count)
     .word   0
 #endif
-
-.data
-DATA(__arm_in_handler)
-    .word   0

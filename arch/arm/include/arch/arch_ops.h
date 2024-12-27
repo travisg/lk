@@ -20,6 +20,8 @@
 
 __BEGIN_CDECLS
 
+enum handler_return platform_irq(struct arm_iframe *frame);
+
 #if ARM_ISA_ARMV7 || (ARM_ISA_ARMV6 && !__thumb__)
 #define ENABLE_CYCLE_COUNTER 1
 
@@ -65,19 +67,6 @@ static inline bool arch_fiqs_disabled(void) {
     state &= (1<<6);
 
     return !!state;
-}
-
-static inline bool arch_in_int_handler(void) {
-#if ARM_ISA_ARMV7M
-    uint32_t ipsr;
-    __asm volatile ("MRS %0, ipsr" : "=r" (ipsr) );
-    return (ipsr & IPSR_ISR_Msk);
-#else
-    /* set by the interrupt glue to track that the cpu is inside a handler */
-    extern bool __arm_in_handler;
-
-    return __arm_in_handler;
-#endif
 }
 
 static inline ulong arch_cycle_count(void) {

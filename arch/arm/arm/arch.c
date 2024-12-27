@@ -49,6 +49,32 @@ static void arm_basic_setup(void);
 static void spinlock_test(void);
 static void spinlock_test_secondary(void);
 
+static uint32_t cpu_in_irq_ctxt[SMP_MAX_CPUS];
+
+enum handler_return arch_irq(struct arm_iframe *frame) {
+    enum handler_return ret;
+    uint32_t cpu = arch_curr_cpu_num();
+    DEBUG_ASSERT(cpu < SMP_MAX_CPUS);
+
+    cpu_in_irq_ctxt[cpu] = 1;
+    ret = platform_irq(frame);
+    cpu_in_irq_ctxt[cpu] = 0;
+    return ret;
+}
+
+bool arch_in_int_handler() {
+#if ARM_ISA_ARMV7M
+    uint32_t ipsr;
+    __asm volatile ("MRS %0, ipsr" : "=r" (ipsr) );
+    return (ipsr & IPSR_ISR_Msk);
+#else
+    uint32_t cpu = arch_curr_cpu_num();
+    DEBUG_ASSERT(cpu < SMP_MAX_CPUS);
+
+    return (cpu_in_irq_ctxt[cpu] == 1);
+#endif
+}
+
 #if WITH_SMP
 /* smp boot lock */
 spin_lock_t arm_boot_cpu_lock = 1;

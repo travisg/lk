@@ -473,6 +473,10 @@ void thread_resched(void) {
     thread_t *current_thread = get_current_thread();
     uint cpu = arch_curr_cpu_num();
 
+    /* Assert that cpu is not in active irq handling
+     * context */
+    ASSERT(!arch_in_int_handler());
+
     DEBUG_ASSERT(arch_ints_disabled());
     DEBUG_ASSERT(spin_lock_held(&thread_lock));
     DEBUG_ASSERT(current_thread->state != THREAD_RUNNING);

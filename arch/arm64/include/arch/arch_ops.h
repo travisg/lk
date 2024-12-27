@@ -19,6 +19,7 @@ __BEGIN_CDECLS
 #define ENABLE_CYCLE_COUNTER 1
 
 void arch_stacktrace(uint64_t fp, uint64_t pc);
+enum handler_return platform_irq(struct arm64_iframe_short *frame);
 
 // override of some routines
 static inline void arch_enable_ints(void) {
