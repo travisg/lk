@@ -34,6 +34,8 @@ __BEGIN_CDECLS
 
 void arm64_context_switch(vaddr_t *old_sp, vaddr_t new_sp);
 
+uint64_t arm64_get_boot_el(void);
+
 /* exception handling */
 struct arm64_iframe_long {
     uint64_t r[30];
@@ -81,6 +83,15 @@ void arm64_syscall(struct arm64_iframe_long *iframe, bool is_64bit);
 void arm64_local_invalidate_cache_all(void);
 void arm64_local_clean_invalidate_cache_all(void);
 void arm64_local_clean_cache_all(void);
+
+/* Current Exception Level values, as contained in CurrentEL */
+#define CurrentEL_EL1    (1 << 2)
+#define CurrentEL_EL2    (2 << 2)
+
+static inline bool arm64_is_kernel_in_hyp_mode(void) {
+    return ARM64_READ_SYSREG(CURRENTEL) == CurrentEL_EL2;
+}
+
 
 __END_CDECLS
 

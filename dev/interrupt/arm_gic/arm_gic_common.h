@@ -230,6 +230,26 @@ GEN_CP15_REG64_FUNCS(icc_sgi0r_el1, 2, c12);
 #define GICD_MIN_SIZE           (GICD_LIMIT - GICD_OFFSET)
 #endif /* GIC_VERSION <= 2 */
 
+/* GICD_CTRL  Register
+ *            Non-Secure   Only_a_Single   two_Security
+ * (1U << 8)  RES0         nASSGIreq       RES0
+ * (1U << 7)  RES0         E1NWF           E1NWF
+ * (1U << 5)  RES0         RES0            ARE_NS
+ * (1U << 4)  ARE_NS       ARE             ARE_S
+ * (1U << 2)  RES0         RES0            ENABLE_G1S
+ * (1U << 1)  ENABLE_G1A   ENABLE_G1       ENABLE_G1NS
+ * (1U << 0)  ENABLE_G1    ENABLE_G0       ENABLE_G0
+ */
+#define GICD_CTLR_RWP           (1U << 31)
+#define GICD_CTLR_nASSGIreq     (1U << 8)
+#define GICD_CTRL_E1NWF         (1U << 7)
+#define GICD_CTLR_DS            (1U << 6)
+#define GICD_CTLR_ARE_NS        (1U << 5)
+#define GICD_CTLR_ARE_S         (1U << 4)
+#define GICD_CTLR_ENABLE_G1S    (1U << 2)
+#define GICD_CTLR_ENABLE_G1NS   (1U << 1)
+#define GICD_CTLR_ENABLE_G0     (1U << 0)
+
 #if GIC_VERSION > 2
 /* some registers of GICD are 64 bit */
 #define GICDREG_READ64(gic, reg) ({ \

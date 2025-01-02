@@ -84,7 +84,7 @@ FUNCTION(arm64_elX_to_el1)
     cmp x4, #(0b01 << 2)
     bne .notEL1
     /* Already in EL1 */
-    ret 
+    ret
 
 .notEL1:
     cmp x4, #(0b10 << 2)

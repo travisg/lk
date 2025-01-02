@@ -105,10 +105,6 @@ static void gicv3_gicr_init(void) {
     gicv3_gicr_mark_awake(cpu);
 }
 
-
-/* GICD_CTRL Register write pending bit */
-#define GICD_CTLR_RWP  (0x1U << 31)
-
 void arm_gicv3_wait_for_write_complete(void) {
     /* wait until write complete */
     while (GICDREG_READ(0, GICD_CTLR) & GICD_CTLR_RWP) {
@@ -158,6 +154,10 @@ static void gicv3_gicd_setup_default_group(uint32_t grp) {
     }
 }
 
+static bool gicv3_gicd_security_disabled(void) {
+    return GICDREG_READ(0, GICD_CTLR) & GICD_CTLR_DS;
+}
+
 static void gicv3_gicr_setup_irq_group(uint32_t vector, uint32_t grp) {
     uint32_t val;
     uint32_t mask;
@@ -193,6 +193,7 @@ static void gicv3_gicr_setup_default_group(uint32_t grp) {
 
 void arm_gicv3_init(void) {
     uint32_t grp_mask = (0x1u << GICV3_IRQ_GROUP);
+    bool disabled_security = gicv3_gicd_security_disabled();
 
 #if !WITH_LIB_SM
     /* non-TZ */
@@ -211,6 +212,12 @@ void arm_gicv3_init(void) {
         GICDREG_WRITE64(0, GICD_IROUTER(i), 0x80000000);
     }
 #endif
+
+    /* Enable distributor with ARE, group 1 enable */
+    if (disabled_security == false) {
+        gicv3_gicd_ctrl_write(GICDREG_READ(0, GICD_CTLR) |
+            (GICD_CTLR_ENABLE_G0 | GICD_CTLR_ENABLE_G1NS | GICD_CTLR_ARE_S));
+    }
 
     /* Enable selected group */
     gicv3_gicd_ctrl_write(GICDREG_READ(0, GICD_CTLR) | grp_mask);

@@ -27,6 +27,13 @@ static spin_lock_t arm_boot_cpu_lock = 1;
 static volatile int secondaries_to_init = 0;
 #endif
 
+/* Defined in start.S. */
+extern uint64_t arm64_boot_el;
+
+uint64_t arm64_get_boot_el(void) {
+    return arm64_boot_el >> 2;
+}
+
 static void arm64_cpu_early_init(void) {
     /* set the vector base */
     ARM64_WRITE_SYSREG(VBAR_EL1, (uint64_t)&arm64_exception_base);
@@ -88,6 +95,8 @@ void arch_init(void) {
     /* flush the release of the lock, since the secondary cpus are running without cache on */
     arch_clean_cache_range((addr_t)&arm_boot_cpu_lock, sizeof(arm_boot_cpu_lock));
 #endif
+
+    LTRACEF("ARM boot EL%llu\n", arm64_get_boot_el());
 }
 
 void arch_quiesce(void) {
