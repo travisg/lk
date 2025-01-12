@@ -15,28 +15,30 @@
  *
  */
 
+#include <lk/compiler.h>
 #include <stddef.h>
 
-#ifdef __cplusplus
-extern "C" {
+__BEGIN_CDECLS
 
-#endif
+size_t call_with_stack_asm(void *stack, const void *function, void *param1,
+                       void *param2, void *param3, void *param4);
 
-size_t call_with_stack(void *stack, int (*fp)(void *, void *), void *param1,
-                       void *param2, void *param3 = nullptr,
-                       void *param4 = nullptr);
+__END_CDECLS
 
-#ifdef __cplusplus
-}
-
-#endif
 #ifdef __cplusplus
 template <typename Function, typename P1, typename P2, typename P3, typename P4>
 size_t call_with_stack(void *stack, Function &&fp, P1 &&param1, P2 &&param2,
-                       P3 param3, P4 &&param4) {
-  return call_with_stack(
-      stack, reinterpret_cast<int (*)(void *, void *)>(fp),
+                       P3 &&param3, P4 &&param4) {
+  return call_with_stack_asm(
+      stack, reinterpret_cast<const void *>(fp),
       reinterpret_cast<void *>(param1), reinterpret_cast<void *>(param2),
       reinterpret_cast<void *>(param3), reinterpret_cast<void *>(param4));
+}
+
+template <typename Function, typename P1, typename P2>
+size_t call_with_stack(void *stack, Function &&fp, P1 &&param1, P2 &&param2) {
+  return call_with_stack_asm(
+      stack, reinterpret_cast<const void *>(fp),
+      reinterpret_cast<void *>(param1), reinterpret_cast<void *>(param2), 0, 0);
 }
 #endif

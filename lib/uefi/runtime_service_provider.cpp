@@ -21,6 +21,8 @@
 #include <stdio.h>
 #include <string.h>
 
+namespace {
+
 constexpr auto &&kSecureBoot = L"SecureBoot";
 
 EFI_STATUS GetVariable(char16_t *VariableName, EfiGuid *VendorGuid,
@@ -61,6 +63,8 @@ EFI_STATUS SetVariable(char16_t *VariableName, EfiGuid *VendorGuid,
   printf("%s is unsupported\n", __FUNCTION__);
   return UNSUPPORTED;
 }
+
+} // namespace
 
 void setup_runtime_service_table(EfiRuntimeService *service) {
   service->GetVariable = GetVariable;

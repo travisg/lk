@@ -14,12 +14,11 @@
  * limitations under the License.
  *
  */
- 
+
 #include <lk/asm.h>
 
-
-// int call_with_stack(void *stack, int (*fp)(), int arg1, int arg2, int arg3, int arg4);
-FUNCTION(call_with_stack)
+// int call_with_stack_asm(void *stack, int (*fp)(), int arg1, int arg2, int arg3, int arg4);
+FUNCTION(call_with_stack_asm)
 stp     fp, lr, [sp, #-16]!
 mov     fp, sp
 
@@ -38,3 +37,4 @@ mov     sp,x7
 
 ldp     fp, lr, [sp], 16
 ret     lr
+END_FUNCTION(call_with_stack_asm)
