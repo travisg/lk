@@ -30,6 +30,9 @@ ifeq ($(FOUND_CHIP),)
 $(error unknown STM32F4xx chip $(STM32_CHIP))
 endif
 
+GLOBAL_DEFINES += \
+    NOVM_MAX_ARENAS=2
+
 GLOBAL_INCLUDES += \
 	$(LOCAL_DIR)/include/dev
 
@@ -40,7 +43,8 @@ MODULE_SRCS += \
 	$(LOCAL_DIR)/timer.c \
 	$(LOCAL_DIR)/debug.c \
 	$(LOCAL_DIR)/uart.c \
-	$(LOCAL_DIR)/flash.c
+	$(LOCAL_DIR)/flash.c \
+	$(LOCAL_DIR)/sdram.c
 
 # use a two segment memory layout, where all of the read-only sections 
 # of the binary reside in rom, and the read/write are in memory. The 
