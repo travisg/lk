@@ -15,7 +15,8 @@ GLOBAL_DEFINES += \
 	PLL_P_VALUE=2
 
 MODULE_SRCS += \
-	$(LOCAL_DIR)/init.c
+	$(LOCAL_DIR)/init.c \
+	$(LOCAL_DIR)/lcd.c
 
 include make/module.mk
 
