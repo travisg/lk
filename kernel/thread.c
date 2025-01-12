@@ -1210,7 +1210,7 @@ int wait_queue_wake_all(wait_queue_t *wait, bool reschedule, status_t wait_queue
     }
 
     /* pop all the threads off the wait queue into the run queue */
-    while ((t = list_remove_head_type(&wait->list, thread_t, queue_node))) {
+    while ((t = list_remove_tail_type(&wait->list, thread_t, queue_node))) {
         wait->count--;
         DEBUG_ASSERT(t->state == THREAD_BLOCKED);
         t->state = THREAD_READY;
