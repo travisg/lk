@@ -156,6 +156,9 @@ GEN_CP15_REG_FUNCS(midr, 0, c0, c0, 0);
 GEN_CP15_REG_FUNCS(mpidr, 0, c0, c0, 5);
 GEN_CP15_REG_FUNCS(vbar, 0, c12, c0, 0);
 GEN_CP15_REG_FUNCS(cbar, 4, c15, c0, 0);
+GEN_CP15_REG_FUNCS(nsacr, 0, c1, c1, 2); // non-secure access control register
+GEN_CP15_REG_FUNCS(cntfrq, 0, c14, c0, 0); // counter frequency
+GEN_CP14_REG_FUNCS(scr, 0, c1, c1, 0); // secure configuration register
 
 GEN_CP15_REG_FUNCS(ats1cpr, 0, c7, c8, 0);
 GEN_CP15_REG_FUNCS(ats1cpw, 0, c7, c8, 1);
