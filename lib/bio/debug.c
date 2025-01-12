@@ -125,7 +125,7 @@ usage:
             ssize_t err_len = bio_read(dev, buf, offset, amt);
 
             if (err_len < 0) {
-                dprintf(ALWAYS, "read error %s %zu@%zu (err_len %ld)\n",
+                dprintf(ALWAYS, "read error %s %zu@%zu (err_len %zd)\n",
                         argv[2].str, amt, (size_t)offset, err_len);
                 break;
             }
@@ -413,7 +413,7 @@ static status_t memory_mapped_test(bdev_t *device) {
     // Erase the first page of the Device.
     ssize_t err = bio_erase(device, 0, device->block_size);
     if (err < (ssize_t)device->block_size) {
-        printf("Expected to erase at least %zu bytes but only erased %ld. "
+        printf("Expected to erase at least %zu bytes but only erased %zd. "
                "Not continuing to test memory mapped mode.\n",
                device->block_size, err);
         retcode = ERR_IO;
@@ -430,7 +430,7 @@ static status_t memory_mapped_test(bdev_t *device) {
     err = bio_write_block(device, test_buffer, 0, 1);
     if (err != (ssize_t)device->block_size) {
         printf("Error while writing test pattern to device. Expected to write "
-               "%zu bytes but actually wrote %ld. Not continuing to test memory "
+               "%zu bytes but actually wrote %zd. Not continuing to test memory "
                "mapped mode.\n", device->block_size, err);
         retcode = ERR_IO;
         goto finish;
@@ -474,7 +474,7 @@ static status_t memory_mapped_test(bdev_t *device) {
     // what we wrote back earlier.
     err = bio_read_block(device, reference_buffer, 0, 1);
     if (err != (ssize_t)device->block_size) {
-        printf("Expected to read %zu bytes, actually read %ld. Aborting.\n",
+        printf("Expected to read %zu bytes, actually read %zd. Aborting.\n",
                device->block_size, err);
         retcode = ERR_IO;
         goto finish;
@@ -501,10 +501,10 @@ finish:
 static int bio_test_device(bdev_t *device) {
     ssize_t num_errors = erase_test(device);
     if (num_errors < 0) {
-        printf("error %ld performing erase test\n", num_errors);
+        printf("error %zd performing erase test\n", num_errors);
         return -1;
     }
-    printf("discovered %ld error(s) while testing erase.\n", num_errors);
+    printf("discovered %zd error(s) while testing erase.\n", num_errors);
     if (num_errors) {
         // No point in continuing the tests if we couldn't erase the device.
         printf("not continuing to test writes.\n");
@@ -512,7 +512,7 @@ static int bio_test_device(bdev_t *device) {
     }
 
     num_errors = write_test(device);
-    printf("Discovered %ld error(s) while testing write.\n", num_errors);
+    printf("Discovered %zd error(s) while testing write.\n", num_errors);
     if (num_errors) {
         return -1;
     }

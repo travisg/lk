@@ -268,7 +268,7 @@ status_t v9fs_read_dir(dircookie *dcookie, struct dirent *ent)
             }
 
             LTRACEF(
-                "head (%u) tail (%u) sread (%ld) offset (%llu) name "
+                "head (%u) tail (%u) sread (%zd) offset (%llu) name "
                 "(%s)\n",
                 dir->head, dir->tail, sread, p9_dent.offset, p9_dent.name);
 
