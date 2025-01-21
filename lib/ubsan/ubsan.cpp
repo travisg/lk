@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <lk/bits.h>
 #include <lk/compiler.h>
 #include <lk/debug.h>
 
@@ -172,7 +173,7 @@ static void ubsan_report_end()
 static void do_ubsan_type_mismatch_nullptr(const ubsan_type_mismatch_data *data, size_t ptr)
 {
     ubsan_report_start(&data->location, "Null pointer dereference");
-    printf("%s null pointer of type %sn", type_check_kinds[data->type_check_kind],
+    printf("%s null pointer of type %s\n", type_check_kinds[data->type_check_kind],
            data->type->typename_);
     ubsan_report_end();
 }
@@ -189,7 +190,7 @@ static void do_ubsan_type_mismatch_unaligned(const ubsan_type_mismatch_data *dat
 static void do_ubsan_type_mismatch_objsize(const ubsan_type_mismatch_data *data, size_t ptr)
 {
     ubsan_report_start(&data->location, "Insufficient object size");
-    printf("%s address %p with insuficient space for type %s\n",
+    printf("%s address %p with insufficient space for type %s\n",
            type_check_kinds[data->type_check_kind], (void *) ptr, data->type->typename_);
     ubsan_report_end();
 }
@@ -314,7 +315,7 @@ static void ubsan_handle_integer_overflow(const ubsan_overflow_data *data, size_
 
     ubsan_report_start(&data->location, "Integer overflow");
 
-    printf("%s integer overflow: %s %s %s can't be represented in type %s",
+    printf("%s integer overflow: %s %s %s can't be represented in type %s\n",
            signed_ ? "signed" : "unsigned", lhs_v.to_string().c_str(), op,
            rhs_v.to_string().c_str(), data->type->typename_);
     ubsan_report_end();
@@ -554,6 +555,79 @@ __USED void __ubsan_handle_vla_bound_not_positive(ubsan_vla_bound_data *data, ss
 __USED void __ubsan_handle_vla_bound_not_positive_abort(ubsan_vla_bound_data *data, ssize_t val)
 {
     __ubsan_handle_vla_bound_not_positive(data, val);
+    ubsan_abort();
+}
+
+struct ubsan_function_type_mismatch_data {
+    ubsan_source_location location;
+    ubsan_type_descriptor *type;
+    val function_ptr;
+};
+
+__USED void __ubsan_handle_function_type_mismatch(ubsan_function_type_mismatch_data *data, size_t ptr)
+{
+    ubsan_report_start(&data->location, "function type mismatch");
+    printf("Call function(%p) through pointer with incompatible type %s\n",
+           (void *) ptr, data->type->typename_);
+    ubsan_report_end();
+}
+
+__USED void __ubsan_handle_function_type_mismatch_abort(ubsan_function_type_mismatch_data *data, size_t ptr)
+{
+    __ubsan_handle_function_type_mismatch(data, ptr);
+    ubsan_abort();
+}
+
+struct ubsan_alignment_assumption_data {
+    struct ubsan_source_location location;
+    struct ubsan_source_location assumption_location;
+    struct ubsan_type_descriptor *type;
+};
+
+__USED void __ubsan_handle_alignment_assumption(ubsan_alignment_assumption_data *data, ssize_t ptr,
+                                                ssize_t align, ssize_t offset)
+{
+    ssize_t real_ptr;
+    ubsan_report_start(&data->location, "Alignment Error");
+    if (offset)
+        printf("assumption of %zd byte alignment (with offset of %zd byte) for pointer of type %s failed",
+               align, offset, data->type->typename_);
+    else
+        printf("assumption of %zd byte alignment for pointer of type %s failed",
+               align, data->type->typename_);
+
+    real_ptr = ptr - offset;
+    printf(" %saddress is %lu aligned, misalignment offset is %zd bytes\n",
+            offset ? "offset " : "", real_ptr ? (1 << ffs(real_ptr)) : 1,
+            real_ptr & (align - 1));
+
+    ubsan_report_end();
+}
+
+__USED void __ubsan_handle_alignment_assumption_abort(ubsan_alignment_assumption_data *data,
+                                                      ssize_t ptr, ssize_t align, ssize_t offset)
+{
+    __ubsan_handle_alignment_assumption(data, ptr, align, offset);
+    ubsan_abort();
+}
+
+struct ubsan_float_cast_data {
+    struct ubsan_source_location location;
+    struct ubsan_type_descriptor *from_type;
+    struct ubsan_type_descriptor *to_type;
+};
+
+__USED void __ubsan_handle_float_cast_overflow(ubsan_float_cast_data *data, size_t ptr)
+{
+    ubsan_report_start(&data->location, "Float Cast Overflow");
+    printf("value %s is outside of the range of representable value of type %s at %p\n",
+            data->from_type->typename_, data->to_type->typename_, (void *) ptr);
+    ubsan_report_end();
+}
+
+__USED void __ubsan_handle_float_cast_overflow_abort(ubsan_float_cast_data *data, size_t ptr)
+{
+    __ubsan_handle_float_cast_overflow(data, ptr);
     ubsan_abort();
 }
 

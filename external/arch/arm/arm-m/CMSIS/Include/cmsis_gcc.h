@@ -27,6 +27,7 @@
 
 /* LK: include lk's compiler.h first, which has some of the same #defines */
 #include <lk/compiler.h>
+__BEGIN_CDECLS
 
 /* ignore some GCC warnings */
 #pragma GCC diagnostic push
@@ -2211,4 +2212,5 @@ __STATIC_FORCEINLINE int32_t __SMMLA (int32_t op1, int32_t op2, int32_t op3)
 
 #pragma GCC diagnostic pop
 
+__END_CDECLS
 #endif /* __CMSIS_GCC_H */

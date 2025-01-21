@@ -44,7 +44,11 @@ enum handler_return {
     INT_RESCHEDULE,
 };
 
+#ifdef __LP64__
 typedef signed long int ssize_t;
+#else
+typedef signed int ssize_t;
+#endif
 
 typedef uint8_t u8;
 typedef uint16_t u16;

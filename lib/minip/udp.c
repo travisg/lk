@@ -148,7 +148,7 @@ status_t udp_send_iovec(const iovec_t *iov, uint iov_count, udp_socket_t *handle
     udp->chksum = rfc768_chksum(ip, udp);
 #endif
 
-    LTRACEF("packet paylod len %ld\n", len);
+    LTRACEF("packet paylod len %zd\n", len);
 
     minip_tx_handler(minip_tx_arg, p);
 

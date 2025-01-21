@@ -43,7 +43,7 @@ int v9fs_tests(int argc, const console_cmd_args *argv) {
 
     readbytes = fs_read_file(handle, buf, 0, BUF_SIZE);
     if (readbytes < 0) {
-        LOGF("failed to read the target file: %ld\n", readbytes);
+        LOGF("failed to read the target file: %zd\n", readbytes);
         return status;
     }
 
