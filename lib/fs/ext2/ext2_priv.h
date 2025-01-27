@@ -11,6 +11,7 @@
 #include <lib/bcache.h>
 #include <lib/fs.h>
 #include "ext2_fs.h"
+#include "ext4_fs.h"
 
 typedef uint32_t blocknum_t;
 typedef uint32_t inodenum_t;
@@ -24,6 +25,8 @@ typedef struct {
     int s_group_count;
     struct ext2_group_desc *gd;
     struct ext2_inode root_inode;
+
+    bool has_new_directory_entries;
 } ext2_t;
 
 struct cache_block {
@@ -59,6 +62,10 @@ status_t ext2_open_file(fscookie *cookie, const char *path, filecookie **fcookie
 ssize_t ext2_read_file(filecookie *fcookie, void *buf, off_t offset, size_t len);
 status_t ext2_close_file(filecookie *fcookie);
 status_t ext2_stat_file(filecookie *fcookie, struct file_stat *);
+
+status_t ext2_opendir(fscookie *, const char *, dircookie **);
+status_t ext2_readdir(dircookie *, struct dirent *);
+status_t ext2_closedir(dircookie *);
 
 /* mode stuff */
 #define S_IFMT      0170000

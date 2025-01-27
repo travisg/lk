@@ -129,30 +129,65 @@ static blocknum_t file_block_to_fs_block(ext2_t *ext2, struct ext2_inode *inode,
     blocknum_t block;
 
     LTRACEF("inode %p, fileblock %u\n", inode, fileblock);
-
-    uint32_t pos[4];
-    uint32_t level = 0;
-    ext2_calculate_block_pointer_pos(ext2, fileblock, &level, pos);
-
-    LTRACEF("level %d, pos 0x%x 0x%x 0x%x 0x%x\n", level, pos[0], pos[1], pos[2], pos[3]);
-
-    if (level == 0) {
-        /* direct block, just return it directly */
-        block = LE32(inode->i_block[fileblock]);
+    if (inode->i_flags & 0x80000) { // inode is stored using extents
+        ext4_extent_header *eh = (ext4_extent_header*)&inode->i_block;
+        if (LOCAL_TRACE) {
+          printf("its an extent based object\n");
+          printf("eh_magic:      0x%x\n", LE16(eh->eh_magic));
+          printf("eh_entries:    %d\n", LE16(eh->eh_entries));
+          printf("eh_max:        %d\n", LE16(eh->eh_max));
+          printf("eh_depth:      %d\n", LE16(eh->eh_depth));
+          printf("eh_generation: %d\n", LE32(eh->eh_generation));
+        }
+        if (LE16(eh->eh_magic) != 0xf30a) {
+          puts("extent header magic invalid");
+          return 0;
+        }
+        block = 0; // TODO
+        if (LE16(eh->eh_depth) == 0) {
+          ext4_extent *extents = (ext4_extent*)( ((ext4_extent*)&inode->i_block) + 1);
+          for (int i=0; i < LE16(eh->eh_entries); i++) {
+#if 0
+            printf("extent %d\n", i);
+            printf("  ee_block:    %d\n", LE32(extents[i].ee_block));
+            printf("  ee_len:      %d\n", LE16(extents[i].ee_len));
+            printf("  ee_start_hi: %d\n", LE16(extents[i].ee_start_hi));
+            printf("  ee_start_lo: %d\n", LE32(extents[i].ee_start_lo));
+#endif
+            if ((fileblock >= LE32(extents[i].ee_block)) && (fileblock < (LE32(extents[i].ee_block) + LE16(extents[i].ee_len)))) {
+              if (LE16(extents[i].ee_start_hi) != 0) {
+                puts("unsupported >32bit blocknr");
+                return 0;
+              }
+              block = LE32(extents[i].ee_start_lo) + (fileblock - LE32(extents[i].ee_block));
+            }
+          }
+        }
     } else {
-        /* at least one level of indirection, get a pointer to the final indirect block table and dereference it */
-        blocknum_t *ind_table;
-        blocknum_t phys_block;
-        err = ext2_get_indirect_block_pointer_cache_block(ext2, inode, &ind_table, level, pos, &phys_block);
-        if (err < 0)
-            return 0;
+        uint32_t pos[4];
+        uint32_t level = 0;
+        ext2_calculate_block_pointer_pos(ext2, fileblock, &level, pos);
 
-        /* dereference the final entry in the final table */
-        block = LE32(ind_table[pos[level]]);
-        LTRACEF("block %u, indirect_block %u\n", block, phys_block);
+        LTRACEF("level %d, pos 0x%x 0x%x 0x%x 0x%x\n", level, pos[0], pos[1], pos[2], pos[3]);
 
-        /* release the ref on the cache block */
-        ext2_put_block(ext2, phys_block);
+        if (level == 0) {
+            /* direct block, just return it directly */
+            block = LE32(inode->i_block[fileblock]);
+        } else {
+            /* at least one level of indirection, get a pointer to the final indirect block table and dereference it */
+            blocknum_t *ind_table;
+            blocknum_t phys_block;
+            err = ext2_get_indirect_block_pointer_cache_block(ext2, inode, &ind_table, level, pos, &phys_block);
+            if (err < 0)
+                return 0;
+
+            /* dereference the final entry in the final table */
+            block = LE32(ind_table[pos[level]]);
+            LTRACEF("block %u, indirect_block %u\n", block, phys_block);
+
+            /* release the ref on the cache block */
+            ext2_put_block(ext2, phys_block);
+        }
     }
 
     LTRACEF("returning %u\n", block);
@@ -167,6 +202,10 @@ ssize_t ext2_read_inode(ext2_t *ext2, struct ext2_inode *inode, void *_buf, off_
 
     /* calculate the file size */
     off_t file_size = ext2_file_len(ext2, inode);
+    if (inode->i_flags & ~(0x80000)) { // the extent flag
+      printf("unsupported flags on inode: 0x%x\n", inode->i_flags);
+      return -1;
+    }
 
     LTRACEF("inode %p, offset %lld, len %zd, file_size %lld\n", inode, offset, len, file_size);
 

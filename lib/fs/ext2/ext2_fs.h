@@ -69,6 +69,8 @@
 
 /*
  * Structure of a blocks group descriptor
+ * for ext4 compat, each descriptor is now 64 bytes in size
+ * when mounting ext2, bio_read will only populate the lower 32 bytes of each descriptor
  */
 struct ext2_group_desc {
     uint32_t    bg_block_bitmap;        /* Blocks bitmap block */
@@ -79,6 +81,7 @@ struct ext2_group_desc {
     uint16_t    bg_used_dirs_count; /* Directories count */
     uint16_t    bg_pad;
     uint32_t    bg_reserved[3];
+    uint8_t     bg_reserved2[32]; // TODO, fill in the other fields
 };
 
 /*
@@ -99,6 +102,7 @@ struct ext2_group_desc {
 
 /*
  * Structure of an inode on the disk
+ * endian_swap_inode and ext2_load_inode deal with byte-order
  */
 struct ext2_inode {
     uint16_t    i_mode;     /* File mode */
@@ -280,12 +284,68 @@ struct ext2_super_block {
     uint32_t    s_journal_dev;      /* device number of journal file */
     uint32_t    s_last_orphan;      /* start of list of inodes to delete */
     uint32_t    s_hash_seed[4];     /* HTREE hash seed */
-    uint8_t s_def_hash_version; /* Default hash version to use */
-    uint8_t s_reserved_char_pad;
-    uint16_t    s_reserved_word_pad;
+    uint8_t     s_def_hash_version; /* Default hash version to use */
+    uint8_t     s_jnl_backup_type;
+    uint16_t    s_desc_size;        // size of group descriptors, if INCOMPAT_64BIT is set
     uint32_t    s_default_mount_opts;
     uint32_t    s_first_meta_bg;    /* First metablock block group */
-    uint32_t    s_reserved[190];    /* Padding to the end of the block */
+    // the following are added in at least ext4
+    uint32_t    s_mkfs_time;
+    uint32_t    s_jnl_blocks[17];
+    // these upper 32bits are only used if EXT4_FEATURE_COMPAT_64BIT is set
+    uint32_t    s_blocks_count_hi;
+    uint32_t    s_r_blocks_count_hi;
+    uint32_t    s_free_blocks_count_hi;
+    uint16_t    s_min_extra_isize;
+    uint16_t    s_want_extra_isize;
+    uint32_t    s_flags;
+    uint16_t    s_raid_stride;
+    uint16_t    s_mmp_interval;
+    uint64_t    s_mmp_block;
+    uint32_t    s_raid_stripe_width;
+    uint8_t     s_log_groups_per_flex;
+    uint8_t     s_checksum_type;
+    uint16_t    s_reserved_pad;
+    uint64_t    s_kbytes_written;
+    uint32_t    s_snapshot_inum;
+    uint32_t    s_snapshot_id;
+    uint64_t    s_snapshot_r_blocks_count;
+    uint32_t    s_snapshot_list;
+    uint32_t    s_error_count;
+
+    uint32_t    s_first_error_time;
+    uint32_t    s_first_error_ino;
+    uint64_t    s_first_error_block;
+    uint8_t     s_first_error_func[32];
+    uint32_t    s_first_error_line;
+
+    uint32_t    s_last_error_time;
+    uint32_t    s_last_error_ino;
+    uint32_t    s_last_error_line;
+    uint64_t    s_last_error_block;
+    uint8_t     s_last_error_func[32];
+
+    uint8_t     s_mount_opts[64];
+    uint32_t    s_usr_quota_inum;
+    uint32_t    s_grp_quota_inum;
+    uint32_t    s_overhead_blocks;
+    uint32_t    s_backup_bgs[2];
+    uint8_t     s_encrypt_algos[4];
+    uint8_t     s_encrypt_pw_salt[16];
+    uint32_t    s_lpf_ino;
+    uint32_t    s_prj_quota_inum;
+    uint32_t    s_checksum_seed;
+    uint8_t     s_wtime_hi;
+    uint8_t     s_mtime_hi;
+    uint8_t     s_mkfs_time_hi;
+    uint8_t     s_lastcheck_hi;
+    uint8_t     s_first_error_time_hi;
+    uint8_t     s_last_error_time_hi;
+    uint8_t     s_pad[2];
+    uint16_t    s_encoding;
+    uint16_t    s_encoding_flags;
+    uint32_t    s_reserved[95];     /* Padding to the end of the block */
+    uint32_t    s_checksum;
 };
 
 /*
