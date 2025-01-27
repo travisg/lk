@@ -31,6 +31,7 @@
 
 #define READPORT_MAGIC  (0x70727472)  // 'prtr'
 #define PORTGROUP_MAGIC (0x70727467)  // 'prtg'
+#define PORTHOLD_MAGIC (0x70727467)   // 'prth'
 
 #define PORT_BUFF_SIZE      8
 #define PORT_BUFF_SIZE_BIG 64
@@ -129,16 +130,24 @@ status_t port_create(const char *name, port_mode_t mode, port_t *port) {
             return ERR_INVALID_ARGS;
     }
 
-    if (strlen(name) >= PORT_NAME_LEN)
+    if (strnlen(name, PORT_NAME_LEN) >= PORT_NAME_LEN)
         return ERR_INVALID_ARGS;
+
+
+    // Add a stack-allocated port to the list until we can
+    // replace it with a heap-allocated port.
+    write_port_t stack_wp = { .magic = PORTHOLD_MAGIC };
+    // We waste a few cycles here with a throwaway copy.
+    strlcpy(stack_wp.name, name, sizeof(stack_wp.name));
 
     // lookup for existing port, return that if found.
     write_port_t *wp = NULL;
     THREAD_LOCK(state1);
     list_for_every_entry(&write_port_list, wp, write_port_t, node) {
         if (strcmp(wp->name, name) == 0) {
-            // can't return closed ports.
-            if (wp->magic == WRITEPORT_MAGIC_X)
+            // can't return closed or partial ports.
+            if (wp->magic == WRITEPORT_MAGIC_X ||
+                wp->magic == PORTHOLD_MAGIC)
                 wp = NULL;
             THREAD_UNLOCK(state1);
             if (wp) {
@@ -149,12 +158,17 @@ status_t port_create(const char *name, port_mode_t mode, port_t *port) {
             }
         }
     }
+    list_add_tail(&write_port_list, &stack_wp.node);
     THREAD_UNLOCK(state1);
 
     // not found, create the write port and the circular buffer.
     wp = calloc(1, sizeof(write_port_t));
-    if (!wp)
+    if (!wp) {
+        THREAD_LOCK(state2);
+        list_delete(&stack_wp.node);
+        THREAD_UNLOCK(state2);
         return ERR_NO_MEMORY;
+    }
 
     wp->magic = WRITEPORT_MAGIC_W;
     wp->mode = mode;
@@ -164,13 +178,18 @@ status_t port_create(const char *name, port_mode_t mode, port_t *port) {
     wp->buf = make_buf(mode & PORT_MODE_BIG_BUFFER);
     if (!wp->buf) {
         free(wp);
+        THREAD_LOCK(state2);
+        list_delete(&stack_wp.node);
+        THREAD_UNLOCK(state2);
         return ERR_NO_MEMORY;
     }
 
-    // todo: race condtion! a port with the same name could have been created
-    // by another thread at is point.
+    // Avoid a name collision by swapping the temporary placeholder out of the
+    // list for the actual port.
     THREAD_LOCK(state2);
+    // Let's reserve a stack allocated entry then swap it for the allocated one.
     list_add_tail(&write_port_list, &wp->node);
+    list_delete(&stack_wp.node);
     THREAD_UNLOCK(state2);
 
     *port = (void *)wp;
@@ -205,7 +224,8 @@ status_t port_open(const char *name, void *ctx, port_t *port) {
     THREAD_LOCK(state);
     write_port_t *wp = NULL;
     list_for_every_entry(&write_port_list, wp, write_port_t, node) {
-        if (strcmp(wp->name, name) == 0) {
+        if (strcmp(wp->name, name) == 0 &&
+            wp->magic != PORTHOLD_MAGIC) {
             // found; add read port to write port list.
             rp->wport = wp;
             if (wp->buf) {
