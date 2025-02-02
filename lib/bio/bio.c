@@ -38,7 +38,7 @@ static ssize_t bio_default_read(struct bdev *dev, void *_buf, off_t offset, size
     STACKBUF_DMA_ALIGN(temp, dev->block_size); // temporary buffer for partial block transfers
 
     /* find the starting block */
-    block = offset / dev->block_size;
+    block = divpow2(offset, dev->block_shift);
 
     LTRACEF("buf %p, offset %lld, block %u, len %zd\n", buf, offset, block, len);
     /* handle partial first block */
@@ -134,7 +134,7 @@ static ssize_t bio_default_write(struct bdev *dev, const void *_buf, off_t offse
     STACKBUF_DMA_ALIGN(temp, dev->block_size); // temporary buffer for partial block transfers
 
     /* find the starting block */
-    block = offset / dev->block_size;
+    block = divpow2(offset, dev->block_shift);
 
     LTRACEF("buf %p, offset %lld, block %u, len %zd\n", buf, offset, block, len);
     /* handle partial first block */
